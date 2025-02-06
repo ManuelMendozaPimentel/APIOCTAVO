@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const productoController = require('../controllers/productoController');
 const multer = require('multer');
+const path = require('path');
 
 // Configuración de multer para guardar imágenes
 const storage = multer.diskStorage({
@@ -20,6 +21,7 @@ router.post('/', upload.single('imagen'), productoController.crearProducto); // 
 router.put('/:id', upload.single('imagen'), productoController.actualizarProducto); // Subir imagen al actualizar
 router.get('/', productoController.obtenerProductos);
 router.get('/:id', productoController.obtenerProductoPorId);
+router.get('/buscar', productoController.buscarProductosPorNombre);
 router.delete('/:id', productoController.eliminarProducto);
 
 module.exports = router;

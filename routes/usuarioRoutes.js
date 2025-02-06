@@ -1,5 +1,5 @@
 const express = require('express');
-const { registrarUsuario, loginUsuario,consultarUsuarios,eliminarUsuario,loginUsuarioGoogle,actualizarUsuario } = require('../controllers/usuarioController');
+const { registrarUsuario, loginUsuario,consultarUsuarios,eliminarUsuario,loginUsuarioGoogle,actualizarUsuario, buscarUsuarioPorId,buscarUsuarioPorCorreo } = require('../controllers/usuarioController');
 
 const router = express.Router();
 
@@ -18,5 +18,10 @@ router.get('/consultar', consultarUsuarios);
 router.delete('/eliminar/:id', eliminarUsuario);
 
 router.put('/actualizar/:id', actualizarUsuario);
+
+router.get('/consultar/:id', buscarUsuarioPorId);
+
+// Ruta para buscar usuario por correo
+router.get('/buscar/:correo', buscarUsuarioPorCorreo);
 
 module.exports = router;
