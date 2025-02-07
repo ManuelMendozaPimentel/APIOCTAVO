@@ -51,17 +51,100 @@ class Producto {
   }
 
   // Actualizar un producto
-  static async actualizarProducto(id, { nombre, descripcion, precio, categoria_id, imagen_url, stock, sku }) {
+static async actualizarProducto(id, datos) {
+  const updates = [];
+  const values = [];
+  let paramIndex = 1;
+
+  // Construir dinámicamente la consulta SQL
+  for (const [key, value] of Object.entries(datos)) {
+    if (value !== undefined && value !== null) {
+      updates.push(`${key} = $${paramIndex}`);
+      values.push(value);
+      paramIndex++;
+    }
+  }
+
+  // Si no hay campos para actualizar, lanzar un error
+  if (updates.length === 0) {
+    throw new Error('No se proporcionaron campos para actualizar');
+  }
+
+  // Agregar el ID del producto al final de los valores
+  values.push(id);
+
+  const query = `
+    UPDATE productos
+    SET ${updates.join(', ')}
+    WHERE id = $${paramIndex}
+    RETURNING *;
+  `;
+
+  const result = await pool.query(query, values);
+  return result.rows[0];
+}
+
+//aumentar el stock disponible
+ static async aumentarStock(id, cantidad) {
+    if (typeof cantidad !== 'number' || cantidad <= 0) {
+      throw new Error('La cantidad debe ser un número positivo');
+    }
+
     const query = `
       UPDATE productos
-      SET nombre = $1, descripcion = $2, precio = $3, categoria_id = $4, imagen_url = $5, stock = $6, sku = $7
-      WHERE id = $8 RETURNING *;
+      SET stock = stock + $1
+      WHERE id = $2 RETURNING *;
     `;
-    const values = [nombre, descripcion, precio, categoria_id, imagen_url, stock, sku, id];
+    const values = [cantidad, id];
     const result = await pool.query(query, values);
+
+    if (result.rows.length === 0) {
+      throw new Error('Producto no encontrado');
+    }
+
+    return result.rows[0];
+ }
+
+  static async ajustarStock(id, cantidad) {
+    if (typeof cantidad !== 'number' || cantidad < 0) {
+      throw new Error('La cantidad debe ser un número positivo o cero');
+    }
+
+    const query = `
+      UPDATE productos
+      SET stock = $1
+      WHERE id = $2 RETURNING *;
+    `;
+    const values = [cantidad, id];
+    const result = await pool.query(query, values);
+
+    if (result.rows.length === 0) {
+      throw new Error('Producto no encontrado');
+    }
+
     return result.rows[0];
   }
 
+  // Reducir stock
+  static async reducirStock(id, cantidad) {
+    if (typeof cantidad !== 'number' || cantidad <= 0) {
+      throw new Error('La cantidad debe ser un número positivo');
+    }
+
+    const query = `
+      UPDATE productos
+      SET stock = stock - $1
+      WHERE id = $2 RETURNING *;
+    `;
+    const values = [cantidad, id];
+    const result = await pool.query(query, values);
+
+    if (result.rows.length === 0) {
+      throw new Error('Producto no encontrado');
+    }
+
+    return result.rows[0];
+  }
   // Eliminar un producto
   static async eliminarProducto(id) {
     const query = 'DELETE FROM productos WHERE id = $1 RETURNING *;';

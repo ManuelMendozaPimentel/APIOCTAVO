@@ -71,39 +71,75 @@ exports.buscarProductosPorNombre = async (req, res) => {
 
 // Actualizar un producto
 exports.actualizarProducto = async (req, res) => {
-    try {
-      const { nombre, descripcion, precio, id_categoria, sku, stock } = req.body;
-      const imagen_url = req.file ? req.file.filename : req.body.imagen_url;
-  
-      // Verificar si la categoría existe si se proporcionó una
-      let categoriaExistente = null;
-      if (id_categoria) {
-        categoriaExistente = await Categoria.obtenerPorId(id_categoria);
-        if (!categoriaExistente) {
-          return res.status(404).json({ msg: 'Categoría no encontrada' });
-        }
-      }
-  
-      const productoActualizado = await Producto.actualizarProducto(req.params.id, {
-        nombre,
-        descripcion,
-        precio,
-        categoria_id: id_categoria || null,
-        imagen_url,
-        stock,
-        sku,
-      });
-  
-      if (!productoActualizado) {
-        return res.status(404).json({ msg: 'Producto no encontrado' });
-      }
-  
-      res.status(200).json(productoActualizado);
-    } catch (error) {
-      res.status(500).json({ msg: 'Error al actualizar el producto', error: error.message });
-    }
-  };
+  try {
+    const { id } = req.params;
+    const datosActualizacion = req.body;
 
+    // Validar que se haya proporcionado al menos un campo para actualizar
+    if (Object.keys(datosActualizacion).length === 0) {
+      return res.status(400).json({ msg: 'Debes proporcionar al menos un campo para actualizar' });
+    }
+
+    // Actualizar el producto
+    const productoActualizado = await Producto.actualizarProducto(id, datosActualizacion);
+
+    if (!productoActualizado) {
+      return res.status(404).json({ msg: 'Producto no encontrado' });
+    }
+
+    res.status(200).json(productoActualizado);
+  } catch (error) {
+    res.status(500).json({ msg: 'Error al actualizar el producto', error: error.message });
+  }
+};
+
+
+exports.aumentarStockProducto = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { cantidad } = req.body;
+
+    if (cantidad === undefined || cantidad === null) {
+      return res.status(400).json({ msg: 'El campo "cantidad" es obligatorio' });
+    }
+
+    const productoActualizado = await Producto.aumentarStock(id, cantidad);
+    res.status(200).json(productoActualizado);
+  } catch (error) {
+    res.status(500).json({ msg: 'Error al aumentar el stock', error: error.message });
+  }
+};
+exports.ajustarStockProducto = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { cantidad } = req.body;
+
+    if (cantidad === undefined || cantidad === null) {
+      return res.status(400).json({ msg: 'El campo "cantidad" es obligatorio' });
+    }
+
+    const productoActualizado = await Producto.ajustarStock(id, cantidad);
+    res.status(200).json(productoActualizado);
+  } catch (error) {
+    res.status(500).json({ msg: 'Error al ajustar el stock', error: error.message });
+  }
+};
+
+exports.reducirStockProducto = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { cantidad } = req.body;
+
+    if (cantidad === undefined || cantidad === null) {
+      return res.status(400).json({ msg: 'El campo "cantidad" es obligatorio' });
+    }
+
+    const productoActualizado = await Producto.reducirStock(id, cantidad);
+    res.status(200).json(productoActualizado);
+  } catch (error) {
+    res.status(500).json({ msg: 'Error al reducir el stock', error: error.message });
+  }
+};
 // Eliminar un producto
 exports.eliminarProducto = async (req, res) => {
   try {
