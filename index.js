@@ -14,11 +14,12 @@ const app = express();
 
 // Configura cors para permitir solicitudes desde http://localhost:4200
 app.use(cors({
-    credentials: true,
     origin: 'http://localhost:4200',
-    methods: ['GET', 'POST', 'PUT', 'DELETE'], // Métodos HTTP permitidos
-    allowedHeaders: ['Content-Type', 'Authorization'], // Encabezados permitidos
-}));
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    exposedHeaders: ['Authorization'], // Añade esto
+    credentials: true
+  }));
 
 // Conectar a la base de datos (el pool ya maneja la conexión)
 // No necesitas llamar a ninguna función aquí

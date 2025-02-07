@@ -94,14 +94,31 @@ exports.loginUsuario = async (req, res) => {
       return res.status(401).json({ message: 'Contraseña incorrecta' });
     }
 
-    const token = jwt.sign({ id: usuario.id, correo: usuario.correo }, process.env.JWT_SECRET, {
-      expiresIn: process.env.JWT_EXPIRES_IN,
+    const token = jwt.sign(
+      { 
+        id: usuario.id, 
+        correo: usuario.correo,
+        tipo: usuario.tipo // Asegúrate de incluir el tipo de usuario
+      }, 
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN }
+    );
+
+    // Respuesta modificada para incluir datos del usuario
+    res.json({
+      success: true,
+      token: token,
+      user: {
+        id: usuario.id,
+        correo: usuario.correo,
+        tipo: usuario.tipo,
+        nombre: usuario.nombre // Incluir otros datos necesarios
+      }
     });
 
-    res.status(200).json({ message: 'Login exitoso', token });
   } catch (error) {
-    console.error('Error en loginUsuario:', error);
-    res.status(500).json({ message: 'Error al iniciar sesión', error });
+    console.error('Error en login:', error);
+    res.status(500).json({ message: 'Error interno del servidor' });
   }
 };
 
@@ -179,3 +196,48 @@ exports.buscarUsuarioPorCorreo = async (req, res) => {
     res.status(500).json({ message: 'Error al buscar usuario', error });
   }
 }
+
+// Añade esto al final de usuarioController.js
+exports.refreshToken = async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'Token no proporcionado' });
+  }
+
+  const token = authHeader.split(' ')[1];
+
+  try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET, { ignoreExpiration: true });
+      
+      // Verificar si el usuario aún existe
+      const usuario = await Usuario.obtenerPorId(decoded.id);
+      if (!usuario) {
+          return res.status(404).json({ message: 'Usuario no encontrado' });
+      }
+
+      // Generar nuevo token
+      const newToken = jwt.sign(
+          { 
+              id: usuario.id, 
+              correo: usuario.correo,
+              tipo: usuario.tipo
+          }, 
+          process.env.JWT_SECRET,
+          { expiresIn: process.env.JWT_EXPIRES_IN }
+      );
+
+      res.json({
+          token: newToken,
+          user: {
+              id: usuario.id,
+              correo: usuario.correo,
+              tipo: usuario.tipo,
+              nombre: usuario.nombre
+          }
+      });
+  } catch (error) {
+      console.error('Error en refreshToken:', error);
+      res.status(401).json({ message: 'Token inválido o expirado' });
+  }
+};
