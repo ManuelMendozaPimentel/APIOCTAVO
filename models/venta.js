@@ -21,20 +21,20 @@ class Venta {
       const ventaResult = await client.query(ventaQuery, ventaValues);
       const venta = ventaResult.rows[0];
 
-     // Insertar detalles de la venta
-for (const item of ventaData.productos) {
-  const detalleQuery = `
-    INSERT INTO detalles_venta (pedido_id, producto_id, cantidad, precio_unitario)
-    VALUES ($1, $2, $3, $4)
-  `;
-  await client.query(detalleQuery, [venta.id, item.producto, item.cantidad, item.precioUnitario]);
+      // Insertar detalles de la venta
+      for (const item of ventaData.productos) {
+        const detalleQuery = `
+          INSERT INTO detalles_venta (venta_id, producto_id, cantidad, precio_unitario)
+          VALUES ($1, $2, $3, $4)
+        `;
+        await client.query(detalleQuery, [venta.id, item.producto, item.cantidad, item.precioUnitario]);
 
-  // Actualizar stock
-  await client.query(
-    'UPDATE productos SET stock = stock - $1 WHERE id = $2',
-    [item.cantidad, item.producto]
-  );
-}
+        // Actualizar stock
+        await client.query(
+          'UPDATE productos SET stock = stock - $1 WHERE id = $2',
+          [item.cantidad, item.producto]
+        );
+      }
 
       await client.query('COMMIT');
       return venta;
@@ -71,7 +71,7 @@ for (const item of ventaData.productos) {
                )
                FROM detalles_venta dv
                JOIN productos pr ON dv.producto_id = pr.id
-               WHERE dv.pedido_id = v.id
+               WHERE dv.venta_id = v.id
              ) as productos
       FROM venta v
       LEFT JOIN usuarios c ON v.usuario_id = c.id
@@ -106,7 +106,7 @@ for (const item of ventaData.productos) {
                )
                FROM detalles_venta dv
                JOIN productos pr ON dv.producto_id = pr.id
-               WHERE dv.pedido_id = v.id
+               WHERE dv.venta_id = v.id
              ) as productos
       FROM venta v
       LEFT JOIN usuarios c ON v.usuario_id = c.id
@@ -177,7 +177,7 @@ for (const item of ventaData.productos) {
         const detallesQuery = `
           SELECT producto_id, cantidad
           FROM detalles_venta
-          WHERE pedido_id = $1;
+          WHERE venta_id = $1;
         `;
         const detallesResult = await client.query(detallesQuery, [id]);
         detalles = detallesResult.rows;
@@ -192,7 +192,7 @@ for (const item of ventaData.productos) {
       }
   
       // Eliminar los detalles de la venta
-      await client.query('DELETE FROM detalles_venta WHERE pedido_id = $1', [id]);
+      await client.query('DELETE FROM detalles_venta WHERE venta_id = $1', [id]);
   
       // Eliminar la venta
       const ventaQuery = 'DELETE FROM venta WHERE id = $1 RETURNING *';
