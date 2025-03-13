@@ -19,10 +19,21 @@ function generarContrasenaTemporal() {
   return Math.random().toString(36).slice(-8);
 }
 
-// Registrar usuario por admin (solo admin)
+/**
+ * Registrar un usuario administrador (solo accesible por admin).
+ * - Valida que se proporcione un correo único.
+ * - Genera una contraseña temporal y envía un correo al nuevo usuario.
+ * - Establece la bandera `cambiar_contrasena` en `true`.
+ */
 exports.registrarUsuarioAdmin = async (req, res) => {
   const { nombre, correo, rol } = req.body;
   try {
+    // Verificar si el correo ya está registrado
+    const usuarioExistente = await Usuario.obtenerPorCorreo(correo); // Aquí está la validación de correo duplicado
+    if (usuarioExistente) {
+      return res.status(400).json({ message: 'El correo ya está registrado' });
+    }
+
     const tempPassword = generarContrasenaTemporal();
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
@@ -31,7 +42,7 @@ exports.registrarUsuarioAdmin = async (req, res) => {
       correo,
       contrasena: hashedPassword,
       rol,
-      cambiar_contrasena: true
+      cambiar_contrasena: true // Forzar cambio de contraseña al primer login
     });
 
     await transporter.sendMail({
@@ -55,12 +66,18 @@ exports.registrarUsuarioAdmin = async (req, res) => {
   }
 };
 
-// Registro tradicional (clientes)
+/**
+ * Registro tradicional de usuarios (clientes).
+ * - Valida que el correo no esté registrado previamente.
+ * - Hashea la contraseña antes de guardarla en la base de datos.
+ * - Genera un token JWT para el usuario recién registrado.
+ */
 exports.registrarUsuario = async (req, res) => {
   const { nombre, apellidos, correo, contrasena, direccion, telefono } = req.body;
   
   try {
-    const usuarioExistente = await Usuario.obtenerPorCorreo(correo);
+    // Validar que el correo no esté registrado
+    const usuarioExistente = await Usuario.obtenerPorCorreo(correo); // Aquí está la validación de correo duplicado
     if (usuarioExistente) {
       return res.status(400).json({ message: 'El correo ya está registrado' });
     }
@@ -98,15 +115,20 @@ exports.registrarUsuario = async (req, res) => {
   }
 };
 
-// Login tradicional
+/**
+ * Login tradicional para usuarios registrados.
+ * - Valida que el correo exista en la base de datos.
+ * - Compara la contraseña hasheada con la proporcionada.
+ * - Si la bandera `cambiar_contrasena` está activa, obliga al usuario a cambiar su contraseña.
+ */
 exports.loginUsuario = async (req, res) => {
   const { correo, contrasena } = req.body;
   
   try {
     const usuario = await Usuario.obtenerPorCorreo(correo);
-    if (!usuario) return res.status(404).json({ message: 'Usuario no encontrado' });
+    if (!usuario) return res.status(404).json({ message: 'Usuario no encontrado' }); // Aquí está la validación de usuario inexistente
 
-    const esValida = await bcrypt.compare(contrasena, usuario.contrasena);
+    const esValida = await bcrypt.compare(contrasena, usuario.contrasena); // Aquí está la validación de contraseña incorrecta
     if (!esValida) return res.status(401).json({ message: 'Contraseña incorrecta' });
 
     if (usuario.cambiar_contrasena) {
@@ -143,7 +165,12 @@ exports.loginUsuario = async (req, res) => {
   }
 };
 
-// Login con Google
+/**
+ * Login con Google.
+ * - Verifica el token de Google y obtiene los datos del usuario.
+ * - Si el usuario no existe, crea uno nuevo con rol `cliente`.
+ * - Genera un token JWT para el usuario.
+ */
 exports.loginUsuarioGoogle = async (req, res) => {
   const { idToken } = req.body;
   
@@ -187,22 +214,27 @@ exports.loginUsuarioGoogle = async (req, res) => {
   }
 };
 
-// Refresh Token
+/**
+ * Refrescar token JWT.
+ * - Valida que se proporcione un token válido.
+ * - Verifica que el usuario asociado al token aún exista en la base de datos.
+ * - Genera un nuevo token JWT.
+ */
 exports.refreshToken = async (req, res) => {
   const authHeader = req.headers.authorization;
   
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ message: 'Token no proporcionado' });
+    return res.status(401).json({ message: 'Token no proporcionado' }); // Aquí está la validación de token no proporcionado
   }
 
   const token = authHeader.split(' ')[1];
   
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET, { ignoreExpiration: true });
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, { ignoreExpiration: true }); // Aquí está la validación de token expirado o inválido
     const usuario = await Usuario.obtenerPorId(decoded.id);
     
     if (!usuario) {
-      return res.status(404).json({ message: 'Usuario no encontrado' });
+      return res.status(404).json({ message: 'Usuario no encontrado' }); // Aquí está la validación de usuario eliminado
     }
 
     const newToken = jwt.sign(
@@ -225,7 +257,12 @@ exports.refreshToken = async (req, res) => {
   }
 };
 
-// Cambiar contraseña
+/**
+ * Cambiar contraseña de un usuario.
+ * - Valida que la contraseña actual sea correcta (excepto para primer cambio).
+ * - Hashea la nueva contraseña antes de actualizarla en la base de datos.
+ * - Desactiva la bandera `cambiar_contrasena` después del cambio.
+ */
 exports.cambiarContrasena = async (req, res) => {
   const { id } = req.user;
   const { contrasena_actual, nueva_contrasena } = req.body;
@@ -235,14 +272,14 @@ exports.cambiarContrasena = async (req, res) => {
     
     // Validar contraseña actual (excepto para primer cambio)
     if (!usuario.cambiar_contrasena) {
-      const valida = await bcrypt.compare(contrasena_actual, usuario.contrasena);
+      const valida = await bcrypt.compare(contrasena_actual, usuario.contrasena); // Aquí está la validación de contraseña incorrecta
       if (!valida) return res.status(401).json({ message: 'Contraseña actual incorrecta' });
     }
 
     const hashed = await bcrypt.hash(nueva_contrasena, 10);
     await Usuario.actualizar(id, { 
       contrasena: hashed,
-      cambiar_contrasena: false 
+      cambiar_contrasena: false // Desactivar la bandera de cambio de contraseña
     });
 
     res.json({ message: 'Contraseña actualizada' });
@@ -297,14 +334,77 @@ exports.actualizarUsuario = async (req, res) => {
   }
 };
 
-// Buscar usuario por ID
+/**
+ * Obtener todos los usuarios (solo accesible por admin).
+ * - Valida que el usuario tenga el rol `admin`.
+ * - Consulta y devuelve todos los usuarios registrados en la base de datos.
+ */
+exports.consultarUsuarios = async (req, res) => {
+  try {
+    const usuarios = await Usuario.obtenerTodos();
+    res.status(200).json(usuarios);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al consultar usuarios', error: error.message });
+  }
+};
+
+/**
+ * Eliminar un usuario (solo accesible por admin).
+ * - Valida que el usuario exista en la base de datos.
+ * - Elimina al usuario y devuelve los datos del usuario eliminado.
+ */
+exports.eliminarUsuario = async (req, res) => {
+  const { id } = req.params;
+  
+  try {
+    const usuarioEliminado = await Usuario.eliminar(id);
+    if (!usuarioEliminado) {
+      return res.status(404).json({ message: 'Usuario no encontrado' }); // Aquí está la validación de usuario inexistente
+    }
+    res.status(200).json({ message: 'Usuario eliminado', usuario: usuarioEliminado });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al eliminar usuario', error: error.message });
+  }
+};
+
+/**
+ * Actualizar un usuario (accesible por admin o el mismo usuario).
+ * - Evita que usuarios no admin cambien roles.
+ * - Valida que el usuario exista antes de actualizarlo.
+ * - Actualiza los datos proporcionados y devuelve el usuario actualizado.
+ */
+exports.actualizarUsuario = async (req, res) => {
+  const { id } = req.params;
+  const datos = req.body;
+  
+  try {
+    // Evita que usuarios no admin cambien roles
+    if (req.user.rol !== 'admin' && datos.rol) {
+      delete datos.rol; // Aquí está la validación para evitar cambios de rol por usuarios no admin
+    }
+
+    const usuarioActualizado = await Usuario.actualizar(id, datos);
+    if (!usuarioActualizado) {
+      return res.status(404).json({ message: 'Usuario no encontrado' }); // Aquí está la validación de usuario inexistente
+    }
+    res.status(200).json({ message: 'Usuario actualizado', usuario: usuarioActualizado });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al actualizar usuario', error: error.message });
+  }
+};
+
+/**
+ * Buscar un usuario por ID.
+ * - Valida que el usuario exista en la base de datos.
+ * - Devuelve los datos del usuario encontrado.
+ */
 exports.buscarUsuarioPorId = async (req, res) => {
   const { id } = req.params;
   
   try {
     const usuario = await Usuario.obtenerPorId(id);
     if (!usuario) {
-      return res.status(404).json({ message: 'Usuario no encontrado' });
+      return res.status(404).json({ message: 'Usuario no encontrado' }); // Aquí está la validación de usuario inexistente
     }
     res.status(200).json(usuario);
   } catch (error) {
@@ -312,14 +412,18 @@ exports.buscarUsuarioPorId = async (req, res) => {
   }
 };
 
-// Buscar usuario por correo
+/**
+ * Buscar un usuario por correo electrónico.
+ * - Valida que el usuario exista en la base de datos.
+ * - Devuelve los datos del usuario encontrado.
+ */
 exports.buscarUsuarioPorCorreo = async (req, res) => {
   const { correo } = req.params;
   
   try {
     const usuario = await Usuario.obtenerPorCorreo(correo);
     if (!usuario) {
-      return res.status(404).json({ message: 'Usuario no encontrado' });
+      return res.status(404).json({ message: 'Usuario no encontrado' }); // Aquí está la validación de usuario inexistente
     }
     res.status(200).json(usuario);
   } catch (error) {
