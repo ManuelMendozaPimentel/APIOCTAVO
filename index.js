@@ -21,9 +21,6 @@ app.use(cors({
     credentials: true
   }));
 
-// Conectar a la base de datos (el pool ya maneja la conexión)
-// No necesitas llamar a ninguna función aquí
-
 // Middlewares
 app.use(express.json());
 

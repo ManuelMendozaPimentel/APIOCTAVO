@@ -1,28 +1,36 @@
 const express = require('express');
-const { registrarUsuario, loginUsuario,consultarUsuarios,eliminarUsuario,loginUsuarioGoogle,actualizarUsuario, buscarUsuarioPorId,buscarUsuarioPorCorreo, refreshToken } = require('../controllers/usuarioController');
+const { 
+  registrarUsuario, 
+  loginUsuario,
+  loginUsuarioGoogle,
+  consultarUsuarios,
+  eliminarUsuario,
+  actualizarUsuario,
+  buscarUsuarioPorId,
+  buscarUsuarioPorCorreo,
+  refreshToken,
+  cambiarContrasena,
+  registrarUsuarioAdmin
+} = require('../controllers/usuarioController');
+const { verificarToken, verificarRol } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-// Ruta para registrar usuario
+// Rutas públicas (sin autenticación)
 router.post('/registro', registrarUsuario);
-
-// Ruta para login
 router.post('/login', loginUsuario);
-
 router.post('/login-google', loginUsuarioGoogle);
-
-// Ruta para consultar usuarios
-router.get('/consultar', consultarUsuarios);
-
-// Ruta para eliminar usuario
-router.delete('/eliminar/:id', eliminarUsuario);
-
-router.put('/actualizar/:id', actualizarUsuario);
-
-router.get('/consultar/:id', buscarUsuarioPorId);
-
-// Ruta para buscar usuario por correo
-router.get('/buscar/:correo', buscarUsuarioPorCorreo);
 router.post('/refresh', refreshToken);
+
+// Rutas protegidas para admin
+router.post('/registro-admin', verificarToken, verificarRol(['admin']), registrarUsuarioAdmin);
+router.get('/consultar', verificarToken, verificarRol(['admin']), consultarUsuarios);
+router.put('/actualizar/:id', verificarToken, verificarRol(['admin']), actualizarUsuario);
+router.delete('/eliminar/:id', verificarToken, verificarRol(['admin']), eliminarUsuario);
+
+// Rutas de consulta (protegidas por token, pero accesibles para roles específicos)
+router.get('/consultar/:id', verificarToken, buscarUsuarioPorId);
+router.get('/buscar/:correo', verificarToken, buscarUsuarioPorCorreo);
+router.post('/cambiar-contrasena', verificarToken, cambiarContrasena);
 
 module.exports = router;

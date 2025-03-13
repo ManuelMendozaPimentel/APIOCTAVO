@@ -1,5 +1,4 @@
-// models/usuario.js
-const pool = require('../config/db'); // Importa la conexión a PostgreSQL
+const pool = require('../config/db');
 
 class Usuario {
   static async obtenerPorCorreo(correo) {
@@ -17,13 +16,25 @@ class Usuario {
   }
 
   static async crear(usuario) {
-    const { nombre, apellidos, correo, contrasena, google_id, direccion, telefono, rol } = usuario;
+    const { nombre, apellidos, correo, contrasena, google_id, direccion, telefono, rol, cambiar_contrasena } = usuario;
     const query = `
-      INSERT INTO usuarios (nombre, apellidos, correo, contrasena, google_id, direccion, telefono, rol)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      RETURNING *
+      INSERT INTO usuarios 
+        (nombre, apellidos, correo, contrasena, google_id, direccion, telefono, rol, cambiar_contrasena)
+      VALUES 
+        ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING id, nombre, apellidos, correo, rol, direccion, telefono, google_id, cambiar_contrasena
     `;
-    const values = [nombre, apellidos, correo, contrasena, google_id, direccion, telefono, rol];
+    const values = [
+      nombre,
+      apellidos || '',
+      correo,
+      contrasena,
+      google_id || null,
+      direccion || '',
+      telefono || '',
+      rol || 'cliente',
+      cambiar_contrasena || false
+    ];
     const result = await pool.query(query, values);
     return result.rows[0];
   }
@@ -43,7 +54,7 @@ class Usuario {
       UPDATE usuarios
       SET ${campos.join(', ')}
       WHERE id = $${indice}
-      RETURNING *
+      RETURNING id, nombre, apellidos, correo, rol, direccion, telefono, google_id, cambiar_contrasena
     `;
     valores.push(id);
     const result = await pool.query(query, valores);
@@ -57,18 +68,10 @@ class Usuario {
     return result.rows[0];
   }
 
-  static async obtenerPorCorreo(correo){
-    const query = 'SELECT * FROM usuarios WHERE correo = $1';
-    const values = [correo];
-    const result = await pool.query(query, values);
-    return result.rows[0];
-  }
-
-  static async obtenerPorId(id) {
-    const query = 'SELECT * FROM usuarios WHERE id = $1';
-    const values = [id];
-    const result = await pool.query(query, values);
-    return result.rows[0];
+  static async obtenerTodos() {
+    const query = 'SELECT id, nombre, apellidos, correo, rol, direccion, telefono FROM usuarios';
+    const result = await pool.query(query);
+    return result.rows;
   }
 }
 
