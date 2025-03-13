@@ -40,16 +40,29 @@ exports.crearProducto = async (req, res) => {
 
 exports.obtenerProductos = async (req, res) => {
   try {
-    const { page, limit, categoria_id, min_precio, max_precio, disponible, activo } = req.query;
+    const { page = 1, limit = 10, categoria_id, min_precio, max_precio, disponible, activo } = req.query;
+
+    // Validar que page y limit sean números enteros positivos
+    const pageInt = parseInt(page, 10);
+    const limitInt = parseInt(limit, 10);
+
+    if (isNaN(pageInt) || pageInt < 1) {
+      throw new Error('El parámetro "page" debe ser un número entero positivo');
+    }
+    if (isNaN(limitInt) || limitInt < 1) {
+      throw new Error('El parámetro "limit" debe ser un número entero positivo');
+    }
+
     const productos = await Producto.obtenerProductos({
-      page: parseInt(page),
-      limit: parseInt(limit),
+      page: pageInt,
+      limit: limitInt,
       categoria_id,
       min_precio: parseFloat(min_precio),
       max_precio: parseFloat(max_precio),
       disponible: disponible === 'true',
       activo: activo === 'true', // Nuevo filtro
     });
+
     res.status(200).json(productos);
   } catch (error) {
     res.status(500).json({ msg: 'Error al obtener los productos', error: error.message });

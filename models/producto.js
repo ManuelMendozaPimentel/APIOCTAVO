@@ -73,7 +73,6 @@ class Producto {
       throw new Error(`Error al obtener los productos: ${error.message}`);
     }
   }
-
   // Obtener un producto por ID
   static async obtenerProductoPorId(id) {
     const query = `
