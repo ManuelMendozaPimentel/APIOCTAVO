@@ -75,6 +75,24 @@ class Categoria {
     const result = await pool.query(query, values);
     return result.rows[0];
   }
+
+  static async obtenerInactivas() {
+    const query = 'SELECT * FROM categorias WHERE activo = FALSE';
+    const result = await pool.query(query);
+    return result.rows;
+  }
+
+  static async activarCategoria(id, activo) {
+    const query = `
+      UPDATE categorias
+      SET activo = $1
+      WHERE id = $2
+      RETURNING *
+    `;
+    const values = [activo, id];
+    const result = await pool.query(query, values);
+    return result.rows[0];
+  }
 }
 
 module.exports = Categoria;

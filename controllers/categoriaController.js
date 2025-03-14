@@ -77,4 +77,37 @@ exports.eliminarCategoria = async (req, res) => {
     console.error('Error al desactivar la categoría:', error);
     res.status(500).json({ msg: 'Error al desactivar la categoría', error: error.message });
   }
+  
+};
+
+exports.obtenerCategoriasInactivas = async (req, res) => {
+  try {
+    const categoriasInactivas = await Categoria.obtenerInactivas();
+    if (categoriasInactivas.length === 0) {
+      return res.status(404).json({ msg: 'No hay categorías inactivas' });
+    }
+    res.status(200).json(categoriasInactivas);
+  } catch (error) {
+    console.error('Error al obtener categorías inactivas:', error);
+    res.status(500).json({ msg: 'Error al obtener categorías inactivas', error: error.message });
+  }
+};
+
+// Activar/desactivar una categoría
+exports.activarCategoria = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { activo } = req.body;
+
+    const categoriaActualizada = await Categoria.activarCategoria(id, activo);
+
+    if (!categoriaActualizada) {
+      return res.status(404).json({ msg: 'Categoría no encontrada' });
+    }
+
+    res.status(200).json(categoriaActualizada);
+  } catch (error) {
+    console.error('Error al activar/desactivar la categoría:', error);
+    res.status(500).json({ msg: 'Error al activar/desactivar la categoría', error: error.message });
+  }
 };
