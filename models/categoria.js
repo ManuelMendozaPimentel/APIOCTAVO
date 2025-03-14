@@ -1,5 +1,3 @@
-// models/categoria.js
-
 const pool = require('../config/db'); // Importa la conexión a PostgreSQL
 
 class Categoria {
@@ -15,13 +13,13 @@ class Categoria {
   }
 
   static async obtenerTodas() {
-    const query = 'SELECT * FROM categorias';
+    const query = 'SELECT * FROM categorias WHERE activo = TRUE';
     const result = await pool.query(query);
     return result.rows;
   }
 
   static async obtenerPorId(id) {
-    const query = 'SELECT * FROM categorias WHERE id = $1';
+    const query = 'SELECT * FROM categorias WHERE id = $1 AND activo = TRUE';
     const values = [id];
     const result = await pool.query(query, values);
     return result.rows[0];
@@ -50,7 +48,7 @@ class Categoria {
     const query = `
       UPDATE categorias
       SET ${campos.join(', ')}
-      WHERE id = $${indice}
+      WHERE id = $${indice} AND activo = TRUE
       RETURNING *
     `;
     valores.push(id);
@@ -60,14 +58,19 @@ class Categoria {
   }
 
   static async eliminar(id) {
-    const query = 'DELETE FROM categorias WHERE id = $1 RETURNING *';
+    const query = `
+      UPDATE categorias
+      SET activo = FALSE
+      WHERE id = $1 AND activo = TRUE
+      RETURNING *
+    `;
     const values = [id];
     const result = await pool.query(query, values);
     return result.rows[0];
   }
 
   static async obtenerPorNombre(nombre) {
-    const query = 'SELECT * FROM categorias WHERE nombre = $1';
+    const query = 'SELECT * FROM categorias WHERE nombre = $1 AND activo = TRUE';
     const values = [nombre];
     const result = await pool.query(query, values);
     return result.rows[0];

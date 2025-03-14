@@ -1,5 +1,3 @@
-// controllers/categoriaController.js
-
 const Categoria = require('../models/categoria');
 
 // Crear una nueva categoría
@@ -38,7 +36,7 @@ exports.obtenerCategoriaPorId = async (req, res) => {
   try {
     const categoria = await Categoria.obtenerPorId(req.params.id);
     if (!categoria) {
-      return res.status(404).json({ msg: 'Categoría no encontrada' });
+      return res.status(404).json({ msg: 'Categoría no encontrada o inactiva' });
     }
     res.status(200).json(categoria);
   } catch (error) {
@@ -56,7 +54,7 @@ exports.actualizarCategoria = async (req, res) => {
     const categoriaActualizada = await Categoria.actualizar(id, { nombre, descripcion });
 
     if (!categoriaActualizada) {
-      return res.status(404).json({ msg: 'Categoría no encontrada' });
+      return res.status(404).json({ msg: 'Categoría no encontrada o inactiva' });
     }
 
     res.status(200).json(categoriaActualizada);
@@ -66,17 +64,17 @@ exports.actualizarCategoria = async (req, res) => {
   }
 };
 
-// Eliminar una categoría
+// Eliminar una categoría (lógica)
 exports.eliminarCategoria = async (req, res) => {
   try {
     const { id } = req.params;
     const categoriaEliminada = await Categoria.eliminar(id);
     if (!categoriaEliminada) {
-      return res.status(404).json({ msg: 'Categoría no encontrada' });
+      return res.status(404).json({ msg: 'Categoría no encontrada o inactiva' });
     }
-    res.status(200).json({ msg: 'Categoría eliminada correctamente' });
+    res.status(200).json({ msg: 'Categoría desactivada correctamente' });
   } catch (error) {
-    console.error('Error al eliminar la categoría:', error);
-    res.status(500).json({ msg: 'Error al eliminar la categoría', error: error.message });
+    console.error('Error al desactivar la categoría:', error);
+    res.status(500).json({ msg: 'Error al desactivar la categoría', error: error.message });
   }
 };
