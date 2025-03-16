@@ -1,6 +1,9 @@
 // config/db.js
-const { Pool } = require('pg');
+const { Pool,types } = require('pg');
 require('dotenv').config();
+
+
+types.setTypeParser(types.builtins.TIMESTAMP, (value) => value);
 
 const pool = new Pool({
   user: process.env.PG_USER,
