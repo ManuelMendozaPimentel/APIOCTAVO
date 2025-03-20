@@ -15,28 +15,26 @@ class Usuario {
     return result.rows[0];
   }
 
-  static async crear(usuario) {
-    const { nombre, apellidos, correo, contrasena, google_id, direccion, telefono, rol, cambiar_contrasena } = usuario;
+ static async crear(usuario) {
+    const { nombre, apellidos, correo, direccion, telefono, rol } = usuario;
+
     const query = `
       INSERT INTO usuarios 
-        (nombre, apellidos, correo, contrasena, google_id, direccion, telefono, rol, cambiar_contrasena)
+        (nombre, apellidos, correo, direccion, telefono, rol)
       VALUES 
-        ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING id, nombre, apellidos, correo, rol, direccion, telefono, google_id, cambiar_contrasena
+        ($1, $2, $3, $4, $5, $6)
+      RETURNING id, nombre, apellidos, correo, direccion, telefono, rol
     `;
-    const values = [
-      nombre,
-      apellidos || '',
-      correo,
-      contrasena,
-      google_id || null,
-      direccion || '',
-      telefono || '',
-      rol || 'cliente',
-      cambiar_contrasena || false
-    ];
-    const result = await pool.query(query, values);
-    return result.rows[0];
+
+    const values = [nombre, apellidos, correo, direccion, telefono, rol];
+
+    try {
+      const result = await pool.query(query, values);
+      return result.rows[0];
+    } catch (error) {
+      console.error('Error al crear usuario:', error);
+      throw error;
+    }
   }
 
   static async actualizar(id, datos) {

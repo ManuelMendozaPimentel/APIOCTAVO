@@ -26,25 +26,32 @@ function generarContrasenaTemporal() {
  * - Establece la bandera `cambiar_contrasena` en `true`.
  */
 exports.registrarUsuarioAdmin = async (req, res) => {
-  const { nombre, correo, rol } = req.body;
+  const { nombre, apellidos, correo, direccion, telefono, rol } = req.body;
+
   try {
     // Verificar si el correo ya está registrado
-    const usuarioExistente = await Usuario.obtenerPorCorreo(correo); // Aquí está la validación de correo duplicado
+    const usuarioExistente = await Usuario.obtenerPorCorreo(correo);
     if (usuarioExistente) {
       return res.status(400).json({ message: 'El correo ya está registrado' });
     }
 
+    // Generar una contraseña temporal
     const tempPassword = generarContrasenaTemporal();
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
+    // Crear el usuario administrativo
     const usuario = await Usuario.crear({
       nombre,
+      apellidos,
       correo,
       contrasena: hashedPassword,
+      direccion,
+      telefono,
       rol,
       cambiar_contrasena: true // Forzar cambio de contraseña al primer login
     });
 
+    // Enviar correo con la contraseña temporal
     await transporter.sendMail({
       from: '"Tienda API" <no-reply@tiendapi.com>',
       to: correo,
@@ -52,17 +59,30 @@ exports.registrarUsuarioAdmin = async (req, res) => {
       text: `Tu contraseña temporal es: ${tempPassword}. Cámbiala en tu primer inicio de sesión.`
     });
 
+    // Generar token JWT (opcional, si deseas devolver un token)
+    const token = jwt.sign(
+      { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN }
+    );
+
+    // Respuesta exitosa
     res.status(201).json({ 
-      message: 'Usuario creado', 
+      message: 'Usuario administrativo creado', 
+      token, // Opcional: Devuelve el token si es necesario
       usuario: {
         id: usuario.id,
         nombre: usuario.nombre,
+        apellidos: usuario.apellidos,
         correo: usuario.correo,
+        direccion: usuario.direccion,
+        telefono: usuario.telefono,
         rol: usuario.rol
       }
     });
   } catch (error) {
-    res.status(500).json({ message: 'Error al crear usuario', error: error.message });
+    console.error('Error al registrar usuario administrativo:', error);
+    res.status(500).json({ message: 'Error al crear usuario administrativo', error: error.message });
   }
 };
 
