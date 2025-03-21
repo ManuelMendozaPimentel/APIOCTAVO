@@ -27,7 +27,6 @@ function generarContrasenaTemporal() {
  */
 exports.registrarUsuarioAdmin = async (req, res) => {
   const { nombre, apellidos, correo, direccion, telefono, rol } = req.body;
-
   try {
     // Verificar si el correo ya está registrado
     const usuarioExistente = await Usuario.obtenerPorCorreo(correo);
@@ -37,19 +36,24 @@ exports.registrarUsuarioAdmin = async (req, res) => {
 
     // Generar una contraseña temporal
     const tempPassword = generarContrasenaTemporal();
+    console.log('Contraseña temporal generada:', tempPassword); // Log para verificar la contraseña
+
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    console.log('Contraseña hasheada:', hashedPassword); // Log para verificar el hash
 
     // Crear el usuario administrativo
     const usuario = await Usuario.crear({
       nombre,
       apellidos,
       correo,
-      contrasena: hashedPassword,
+      contrasena: hashedPassword, // Asegúrate de que este campo se pase correctamente
       direccion,
       telefono,
       rol,
-      cambiar_contrasena: true // Forzar cambio de contraseña al primer login
+      cambiar_contrasena: true
     });
+
+    console.log('Usuario creado:', usuario); // Log para verificar el usuario creado
 
     // Enviar correo con la contraseña temporal
     await transporter.sendMail({
@@ -69,7 +73,7 @@ exports.registrarUsuarioAdmin = async (req, res) => {
     // Respuesta exitosa
     res.status(201).json({ 
       message: 'Usuario administrativo creado', 
-      token, // Opcional: Devuelve el token si es necesario
+      token,
       usuario: {
         id: usuario.id,
         nombre: usuario.nombre,
@@ -94,15 +98,18 @@ exports.registrarUsuarioAdmin = async (req, res) => {
  */
 exports.registrarUsuario = async (req, res) => {
   const { nombre, apellidos, correo, contrasena, direccion, telefono } = req.body;
-  
   try {
     // Validar que el correo no esté registrado
-    const usuarioExistente = await Usuario.obtenerPorCorreo(correo); // Aquí está la validación de correo duplicado
+    const usuarioExistente = await Usuario.obtenerPorCorreo(correo);
     if (usuarioExistente) {
       return res.status(400).json({ message: 'El correo ya está registrado' });
     }
 
+    // Hashear la contraseña
     const hashedPassword = await bcrypt.hash(contrasena, 10);
+    console.log('Contraseña hasheada:', hashedPassword); // Log para verificar el hash
+
+    // Crear el usuario
     const usuario = await Usuario.crear({
       nombre,
       apellidos,
@@ -114,6 +121,9 @@ exports.registrarUsuario = async (req, res) => {
       cambiar_contrasena: false
     });
 
+    console.log('Usuario creado:', usuario); // Log para verificar el usuario creado
+
+    // Generar token JWT
     const token = jwt.sign(
       { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
       process.env.JWT_SECRET,
@@ -131,10 +141,10 @@ exports.registrarUsuario = async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Error al registrar usuario:', error);
     res.status(500).json({ message: 'Error al registrar usuario', error: error.message });
   }
 };
-
 /**
  * Login tradicional para usuarios registrados.
  * - Valida que el correo exista en la base de datos.
@@ -318,18 +328,39 @@ exports.consultarUsuarios = async (req, res) => {
   }
 };
 
-// Eliminar usuario (solo admin)
+/**
+ * Eliminar un usuario (eliminado lógico).
+ * - Valida que el usuario exista en la base de datos.
+ * - Verifica que el usuario no tenga el rol "cliente".
+ * - Actualiza el campo `activo` a `false`.
+ * - Devuelve los datos del usuario desactivado.
+ */
 exports.eliminarUsuario = async (req, res) => {
   const { id } = req.params;
-  
   try {
-    const usuarioEliminado = await Usuario.eliminar(id);
-    if (!usuarioEliminado) {
+    // Obtener el usuario por ID
+    const usuario = await Usuario.obtenerPorId(id);
+    if (!usuario) {
       return res.status(404).json({ message: 'Usuario no encontrado' });
     }
-    res.status(200).json({ message: 'Usuario eliminado', usuario: usuarioEliminado });
+
+    // Verificar si el usuario tiene el rol "cliente"
+    if (usuario.rol === 'cliente') {
+      console.log('Intento de eliminar un usuario con rol cliente:', usuario);
+      return res.status(400).json({ message: 'No se puede desactivar un usuario con rol "cliente".' });
+    }
+
+    // Desactivar el usuario (eliminado lógico)
+    const usuarioDesactivado = await Usuario.eliminar(id);
+    res.status(200).json({ 
+      message: 'Usuario desactivado', 
+      usuario: usuarioDesactivado 
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Error al eliminar usuario', error: error.message });
+    res.status(500).json({ 
+      message: 'Error al desactivar usuario', 
+      error: error.message 
+    });
   }
 };
 
@@ -365,25 +396,6 @@ exports.consultarUsuarios = async (req, res) => {
     res.status(200).json(usuarios);
   } catch (error) {
     res.status(500).json({ message: 'Error al consultar usuarios', error: error.message });
-  }
-};
-
-/**
- * Eliminar un usuario (solo accesible por admin).
- * - Valida que el usuario exista en la base de datos.
- * - Elimina al usuario y devuelve los datos del usuario eliminado.
- */
-exports.eliminarUsuario = async (req, res) => {
-  const { id } = req.params;
-  
-  try {
-    const usuarioEliminado = await Usuario.eliminar(id);
-    if (!usuarioEliminado) {
-      return res.status(404).json({ message: 'Usuario no encontrado' }); // Aquí está la validación de usuario inexistente
-    }
-    res.status(200).json({ message: 'Usuario eliminado', usuario: usuarioEliminado });
-  } catch (error) {
-    res.status(500).json({ message: 'Error al eliminar usuario', error: error.message });
   }
 };
 
