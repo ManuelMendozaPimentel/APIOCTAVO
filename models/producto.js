@@ -42,53 +42,47 @@ class Producto {
    * @param {Object} opciones - Opciones de filtrado y paginación (page, limit, categoria_id, min_precio, max_precio, disponible, activo).
    * @returns {Array} - Lista de productos.
    */
-  static async obtenerProductos({ page = 1, limit = 10, categoria_id, min_precio, max_precio, disponible, activo } = {}) {
+  static async obtenerProductos({ page = 1, limit = 10, categoria_id, min_precio, max_precio, disponible } = {}) {
     // Validar parámetros
     if (isNaN(page) || page < 1) throw new Error('El parámetro "page" debe ser un número entero positivo');
     if (isNaN(limit) || limit < 1) throw new Error('El parámetro "limit" debe ser un número entero positivo');
-
+  
     let query = `
       SELECT p.*, c.nombre AS nombre_categoria, c.descripcion AS descripcion_categoria
       FROM productos p
       LEFT JOIN categorias c ON p.categoria_id = c.id
-      WHERE 1=1
+      WHERE p.activo = true
     `;
     const values = [];
     let paramIndex = 1;
-
-    // Filtros
+  
+    // Filtros adicionales
     if (categoria_id) {
       query += ` AND p.categoria_id = $${paramIndex}`;
       values.push(parseInt(categoria_id, 10));
       paramIndex++;
     }
-
+  
     if (min_precio) {
       query += ` AND p.precio >= $${paramIndex}`;
       values.push(parseFloat(min_precio));
       paramIndex++;
     }
-
+  
     if (max_precio) {
       query += ` AND p.precio <= $${paramIndex}`;
       values.push(parseFloat(max_precio));
       paramIndex++;
     }
-
+  
     if (disponible === 'true' || disponible === true) {
       query += ` AND p.stock > 0`;
     }
-
-    if (activo !== undefined) {
-      query += ` AND p.activo = $${paramIndex}`;
-      values.push(activo === 'true');
-      paramIndex++;
-    }
-
+  
     // Paginación
     query += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
     values.push(parseInt(limit, 10), (parseInt(page, 10) - 1) * parseInt(limit, 10));
-
+  
     try {
       const result = await pool.query(query, values);
       return result.rows;
@@ -168,7 +162,7 @@ class Producto {
     const updates = [];
     const values = [];
     let paramIndex = 1;
-
+  
     for (const [key, value] of Object.entries(datos)) {
       if (value !== undefined && value !== null) {
         updates.push(`${key} = $${paramIndex}`);
@@ -176,11 +170,11 @@ class Producto {
         paramIndex++;
       }
     }
-
+  
     if (updates.length === 0) {
       throw new Error('No se proporcionaron campos para actualizar');
     }
-
+  
     values.push(id);
     const query = `
       UPDATE productos

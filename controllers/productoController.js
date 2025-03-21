@@ -40,7 +40,7 @@ exports.crearProducto = async (req, res) => {
 
 exports.obtenerProductos = async (req, res) => {
   try {
-    const { page = 1, limit = 10, categoria_id, min_precio, max_precio, disponible, activo } = req.query;
+    const { page = 1, limit = 10, categoria_id, min_precio, max_precio, disponible } = req.query;
 
     // Validar que page y limit sean números enteros positivos
     const pageInt = parseInt(page, 10);
@@ -60,7 +60,6 @@ exports.obtenerProductos = async (req, res) => {
       min_precio: parseFloat(min_precio),
       max_precio: parseFloat(max_precio),
       disponible: disponible === 'true',
-      activo: activo === 'true', // Nuevo filtro
     });
 
     res.status(200).json(productos);
