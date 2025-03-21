@@ -295,3 +295,25 @@ exports.eliminarProducto = async (req, res) => {
     res.status(500).json({ msg: 'Error al eliminar el producto', error: error.message });
   }
 };
+
+exports.obtenerProductoPorSku = async (req, res) => {
+  try {
+    const { sku } = req.params;
+
+    // Validar que el SKU no esté vacío
+    if (!sku || typeof sku !== 'string' || sku.trim() === '') {
+      return res.status(400).json({ msg: 'El SKU es obligatorio y debe ser una cadena de texto válida' });
+    }
+
+    // Obtener el producto por SKU
+    const producto = await Producto.obtenerProductoPorSku(sku.trim());
+
+    if (!producto) {
+      return res.status(404).json({ msg: 'Producto no encontrado' });
+    }
+
+    res.status(200).json(producto);
+  } catch (error) {
+    res.status(500).json({ msg: 'Error al obtener el producto por SKU', error: error.message });
+  }
+};

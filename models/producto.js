@@ -402,6 +402,17 @@ class Producto {
     const result = await pool.query(query, values);
     return result.rows;
   }
+  
+  static async obtenerProductoPorSku(sku) {
+    const query = 'SELECT * FROM productos WHERE sku = $1';
+    const values = [sku];
+    try {
+      const result = await pool.query(query, values);
+      return result.rows[0];
+    } catch (error) {
+      throw new Error('Error al verificar el SKU');
+    }
+  }
 }
 
 module.exports = Producto;

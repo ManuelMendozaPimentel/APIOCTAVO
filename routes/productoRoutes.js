@@ -35,5 +35,6 @@ router.post('/:id/stock/reducir', verificarToken, soloAdmin, productoController.
 router.get('/', productoController.obtenerProductos);
 router.get('/buscar', productoController.buscarProductosPorNombre);
 router.get('/:id', productoController.obtenerProductoPorId);
+router.get('/sku/:sku', productoController.obtenerProductoPorSku);
 
 module.exports = router;
