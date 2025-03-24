@@ -6,6 +6,9 @@ const categoriaRoutes = require('./routes/categoriaRoutes');
 const ventasRoutes = require('./routes/ventaRoutes');
 const path = require('path');
 const cors = require('cors');
+const direccionRoutes = require('./routes/direccionRoutes');
+const rolRoutes = require('./routes/rolRoutes');
+const servicioRoutes = require('./routes/servicioRoutes');
 require('dotenv').config();
 
 // Importar conexión a MongoDB
@@ -14,9 +17,8 @@ const connectMongoDB = require('./config/mongoDB');
 // Importar nuevas rutas (MongoDB)
 const comentarioRoutes = require('./routes/mongo/comentarioRoutes');
 const respuestaRoutes = require('./routes/mongo/respuestaRoutes');
-const servicioRoutes = require('./routes/mongo/servicioRoutes');
 
-const app = express();
+const app = express();  
 
 // Configuración de CORS
 app.use(cors({
@@ -38,10 +40,13 @@ app.use('/api/usuarios', usuarioRoutes);
 app.use('/api/productos', productoRoutes);
 app.use('/api/categorias', categoriaRoutes);
 app.use('/api/ventas', ventasRoutes);
+app.use('/api/direcciones', direccionRoutes);
+app.use('/api/roles', rolRoutes);
 
 // Nuevas rutas (MongoDB)
 app.use('/api/comentarios', comentarioRoutes);
 app.use('/api/respuestas', respuestaRoutes);
+
 app.use('/api/servicios', servicioRoutes);
 
 // Ruta para servir archivos estáticos (uploads)

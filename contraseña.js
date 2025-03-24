@@ -13,4 +13,4 @@ async function hashPassword(password) {
   }
   
   // Llama a la función con la contraseña en texto plano
-  hashPassword('AdminPassword123!');
+  hashPassword('12345678');

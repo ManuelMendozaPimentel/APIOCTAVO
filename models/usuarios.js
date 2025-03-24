@@ -2,31 +2,44 @@ const pool = require('../config/db');
 
 class Usuario {
   static async obtenerPorCorreo(correo) {
-    const query = 'SELECT * FROM usuarios WHERE correo = $1';
+    const query = `
+      SELECT u.*, r.nombre as rol_nombre 
+      FROM usuarios u
+      LEFT JOIN roles r ON u.rol_id = r.id
+      WHERE u.correo = $1
+    `;
     const values = [correo];
     const result = await pool.query(query, values);
     return result.rows[0];
   }
 
   static async obtenerPorId(id) {
-    const query = 'SELECT id, nombre, apellidos, correo, rol, direccion, telefono, google_id, cambiar_contrasena, activo FROM usuarios WHERE id = $1';
+    const query = `
+      SELECT 
+        u.id, u.nombre, u.apellidos, u.correo, 
+        u.telefono, u.google_id, u.cambiar_contrasena, 
+        u.activo, u.rol_id, r.nombre as rol_nombre
+      FROM usuarios u
+      LEFT JOIN roles r ON u.rol_id = r.id
+      WHERE u.id = $1
+    `;
     const values = [id];
     const result = await pool.query(query, values);
     return result.rows[0];
   }
 
   static async crear(usuario) {
-    const { nombre, apellidos, correo, contrasena, direccion, telefono, rol } = usuario;
+    const { nombre, apellidos, correo, contrasena, telefono, rol_id } = usuario;
   
     const query = `
       INSERT INTO usuarios 
-        (nombre, apellidos, correo, contrasena, direccion, telefono, rol)
+        (nombre, apellidos, correo, contrasena, telefono, rol_id)
       VALUES 
-        ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING id, nombre, apellidos, correo, direccion, telefono, rol
+        ($1, $2, $3, $4, $5, $6)
+      RETURNING id, nombre, apellidos, correo, telefono, rol_id
     `;
   
-    const values = [nombre, apellidos, correo, contrasena, direccion, telefono, rol];
+    const values = [nombre, apellidos, correo, contrasena, telefono, rol_id];
   
     try {
       const result = await pool.query(query, values);
@@ -52,7 +65,7 @@ class Usuario {
       UPDATE usuarios
       SET ${campos.join(', ')}
       WHERE id = $${indice}
-      RETURNING id, nombre, apellidos, correo, rol, direccion, telefono, google_id, cambiar_contrasena
+      RETURNING id, nombre, apellidos, correo, telefono, rol_id, google_id, cambiar_contrasena
     `;
     valores.push(id);
     const result = await pool.query(query, valores);
@@ -64,7 +77,7 @@ class Usuario {
       UPDATE usuarios
       SET activo = false
       WHERE id = $1
-      RETURNING id, nombre, apellidos, correo, rol, direccion, telefono, google_id, cambiar_contrasena, activo
+      RETURNING id, nombre, apellidos, correo, telefono, rol_id, google_id, cambiar_contrasena, activo
     `;
     const values = [id];
     const result = await pool.query(query, values);
@@ -72,8 +85,21 @@ class Usuario {
   }
 
   static async obtenerTodos() {
-    const query = 'SELECT id, nombre, apellidos, correo, rol, direccion, telefono FROM usuarios';
+    const query = `
+      SELECT 
+        u.id, u.nombre, u.apellidos, u.correo, 
+        u.telefono, r.nombre as rol_nombre
+      FROM usuarios u
+      LEFT JOIN roles r ON u.rol_id = r.id
+      WHERE u.activo = true
+    `;
     const result = await pool.query(query);
+    return result.rows;
+  }
+
+  static async obtenerDirecciones(usuario_id) {
+    const query = 'SELECT * FROM direcciones WHERE usuario_id = $1 ORDER BY principal DESC';
+    const result = await pool.query(query, [usuario_id]);
     return result.rows;
   }
 }

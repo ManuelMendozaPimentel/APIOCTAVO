@@ -3,74 +3,73 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const Usuario = require('../models/usuarios');
+const Rol = require('../models/roles');
+const Direccion = require('../models/direcciones');
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-// Configuración de transporter con variables de entorno
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD // Usa variable de entorno
+    pass: process.env.EMAIL_PASSWORD
   }
 });
 
-// Función para generar contraseñas temporales
 function generarContrasenaTemporal() {
   return Math.random().toString(36).slice(-8);
 }
 
-/**
- * Registrar un usuario administrador (solo accesible por admin).
- * - Valida que se proporcione un correo único.
- * - Genera una contraseña temporal y envía un correo al nuevo usuario.
- * - Establece la bandera `cambiar_contrasena` en `true`.
- */
+// Registro de administrador
 exports.registrarUsuarioAdmin = async (req, res) => {
-  const { nombre, apellidos, correo, direccion, telefono, rol } = req.body;
+  const { nombre, apellidos, correo, telefono, rol_id } = req.body;
+  
   try {
-    // Verificar si el correo ya está registrado
+    // Verificar rol
+    const rol = await Rol.obtenerPorId(rol_id);
+    if (!rol) {
+      return res.status(400).json({ message: 'Rol no válido' });
+    }
+
+    // Verificar correo
     const usuarioExistente = await Usuario.obtenerPorCorreo(correo);
     if (usuarioExistente) {
       return res.status(400).json({ message: 'El correo ya está registrado' });
     }
 
-    // Generar una contraseña temporal
+    // Crear usuario
     const tempPassword = generarContrasenaTemporal();
-    console.log('Contraseña temporal generada:', tempPassword); // Log para verificar la contraseña
-
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
-    console.log('Contraseña hasheada:', hashedPassword); // Log para verificar el hash
 
-    // Crear el usuario administrativo
     const usuario = await Usuario.crear({
       nombre,
       apellidos,
       correo,
-      contrasena: hashedPassword, // Asegúrate de que este campo se pase correctamente
-      direccion,
+      contrasena: hashedPassword,
       telefono,
-      rol,
+      rol_id,
       cambiar_contrasena: true
     });
 
-    console.log('Usuario creado:', usuario); // Log para verificar el usuario creado
-
-    // Enviar correo con la contraseña temporal
+    // Enviar correo (opcional)
     await transporter.sendMail({
-      from: '"Tienda API" <no-reply@tiendapi.com>',
+      from: `"${process.env.APP_NAME}" <${process.env.EMAIL_USER}>`,
       to: correo,
       subject: 'Credenciales de acceso',
-      text: `Tu contraseña temporal es: ${tempPassword}. Cámbiala en tu primer inicio de sesión.`
+      text: `Tu contraseña temporal es: ${tempPassword}`
     });
 
-    // Generar token JWT (opcional, si deseas devolver un token)
+    // Respuesta
     const token = jwt.sign(
-      { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
+      { 
+        id: usuario.id, 
+        correo: usuario.correo, 
+        rol_id: usuario.rol_id,
+        rol_nombre: rol.nombre 
+      },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
     );
 
-    // Respuesta exitosa
     res.status(201).json({ 
       message: 'Usuario administrativo creado', 
       token,
@@ -79,65 +78,67 @@ exports.registrarUsuarioAdmin = async (req, res) => {
         nombre: usuario.nombre,
         apellidos: usuario.apellidos,
         correo: usuario.correo,
-        direccion: usuario.direccion,
         telefono: usuario.telefono,
-        rol: usuario.rol
+        rol_id: usuario.rol_id,
+        rol_nombre: rol.nombre
       }
     });
   } catch (error) {
-    console.error('Error al registrar usuario administrativo:', error);
+    console.error('Error al registrar admin:', error);
     res.status(500).json({ message: 'Error al crear usuario administrativo', error: error.message });
   }
 };
 
-/**
- * Registro tradicional de usuarios (clientes).
- * - Valida que el correo no esté registrado previamente.
- * - Hashea la contraseña antes de guardarla en la base de datos.
- * - Genera un token JWT para el usuario recién registrado.
- */
+// Registro de cliente
 exports.registrarUsuario = async (req, res) => {
-  const { nombre, apellidos, correo, contrasena, direccion, telefono } = req.body;
+  const { nombre, apellidos, correo, contrasena, telefono } = req.body;
+  
   try {
-    // Validar que el correo no esté registrado
+    // Obtener ID del rol cliente (asumimos que es 3)
+    const rolCliente = await Rol.obtenerPorId(3);
+    if (!rolCliente) {
+      return res.status(500).json({ message: 'Configuración de roles incorrecta' });
+    }
+
+    // Verificar correo
     const usuarioExistente = await Usuario.obtenerPorCorreo(correo);
     if (usuarioExistente) {
       return res.status(400).json({ message: 'El correo ya está registrado' });
     }
 
-    // Hashear la contraseña
+    // Crear usuario
     const hashedPassword = await bcrypt.hash(contrasena, 10);
-    console.log('Contraseña hasheada:', hashedPassword); // Log para verificar el hash
-
-    // Crear el usuario
     const usuario = await Usuario.crear({
       nombre,
       apellidos,
       correo,
       contrasena: hashedPassword,
-      direccion,
       telefono,
-      rol: 'cliente',
+      rol_id: rolCliente.id,
       cambiar_contrasena: false
     });
 
-    console.log('Usuario creado:', usuario); // Log para verificar el usuario creado
-
-    // Generar token JWT
+    // Respuesta
     const token = jwt.sign(
-      { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
+      { 
+        id: usuario.id, 
+        correo: usuario.correo, 
+        rol_id: usuario.rol_id,
+        rol_nombre: rolCliente.nombre 
+      },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
     );
 
     res.status(201).json({ 
-      message: 'Usuario registrado', 
+      message: 'Usuario registrado exitosamente',
       token,
       usuario: {
         id: usuario.id,
         nombre: usuario.nombre,
         correo: usuario.correo,
-        rol: usuario.rol
+        rol_id: usuario.rol_id,
+        rol_nombre: rolCliente.nombre
       }
     });
   } catch (error) {
@@ -145,25 +146,30 @@ exports.registrarUsuario = async (req, res) => {
     res.status(500).json({ message: 'Error al registrar usuario', error: error.message });
   }
 };
-/**
- * Login tradicional para usuarios registrados.
- * - Valida que el correo exista en la base de datos.
- * - Compara la contraseña hasheada con la proporcionada.
- * - Si la bandera `cambiar_contrasena` está activa, obliga al usuario a cambiar su contraseña.
- */
+
+// Login tradicional
 exports.loginUsuario = async (req, res) => {
   const { correo, contrasena } = req.body;
   
   try {
     const usuario = await Usuario.obtenerPorCorreo(correo);
-    if (!usuario) return res.status(404).json({ message: 'Usuario no encontrado' }); // Aquí está la validación de usuario inexistente
+    if (!usuario) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
 
-    const esValida = await bcrypt.compare(contrasena, usuario.contrasena); // Aquí está la validación de contraseña incorrecta
-    if (!esValida) return res.status(401).json({ message: 'Contraseña incorrecta' });
+    const esValida = await bcrypt.compare(contrasena, usuario.contrasena);
+    if (!esValida) {
+      return res.status(401).json({ message: 'Credenciales inválidas' });
+    }
 
     if (usuario.cambiar_contrasena) {
       const tokenTemporal = jwt.sign(
-        { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
+        { 
+          id: usuario.id, 
+          correo: usuario.correo, 
+          rol_id: usuario.rol_id,
+          rol_nombre: usuario.rol_nombre 
+        },
         process.env.JWT_SECRET,
         { expiresIn: '15m' }
       );
@@ -175,7 +181,12 @@ exports.loginUsuario = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
+      { 
+        id: usuario.id, 
+        correo: usuario.correo, 
+        rol_id: usuario.rol_id,
+        rol_nombre: usuario.rol_nombre 
+      },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
     );
@@ -187,20 +198,16 @@ exports.loginUsuario = async (req, res) => {
         id: usuario.id,
         nombre: usuario.nombre,
         correo: usuario.correo,
-        rol: usuario.rol
+        rol_id: usuario.rol_id,
+        rol_nombre: usuario.rol_nombre
       }
     });
   } catch (error) {
-    res.status(500).json({ message: 'Error interno del servidor' });
+    res.status(500).json({ message: 'Error en el servidor' });
   }
 };
 
-/**
- * Login con Google.
- * - Verifica el token de Google y obtiene los datos del usuario.
- * - Si el usuario no existe, crea uno nuevo con rol `cliente`.
- * - Genera un token JWT para el usuario.
- */
+// Login con Google
 exports.loginUsuarioGoogle = async (req, res) => {
   const { idToken } = req.body;
   
@@ -213,62 +220,74 @@ exports.loginUsuarioGoogle = async (req, res) => {
 
     let usuario = await Usuario.obtenerPorCorreo(payload.email);
     if (!usuario) {
+      // Obtener ID del rol cliente (asumimos que es 3)
+      const rolCliente = await Rol.obtenerPorId(3);
+      if (!rolCliente) {
+        return res.status(500).json({ message: 'Configuración de roles incorrecta' });
+      }
+
       usuario = await Usuario.crear({
         nombre: payload.given_name,
         apellidos: payload.family_name || '',
         correo: payload.email,
         google_id: payload.sub,
-        rol: 'cliente',
+        rol_id: rolCliente.id,
         cambiar_contrasena: false
       });
     }
 
     const token = jwt.sign(
-      { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
+      { 
+        id: usuario.id, 
+        correo: usuario.correo, 
+        rol_id: usuario.rol_id,
+        rol_nombre: usuario.rol_nombre 
+      },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
     );
 
     res.status(200).json({ 
-      message: 'Login exitoso con Google', 
+      message: 'Login exitoso', 
       token,
       user: {
         id: usuario.id,
         nombre: usuario.nombre,
         correo: usuario.correo,
-        rol: usuario.rol
+        rol_id: usuario.rol_id,
+        rol_nombre: usuario.rol_nombre
       }
     });
   } catch (error) {
-    res.status(500).json({ message: 'Error al iniciar sesión con Google', error: error.message });
+    res.status(500).json({ message: 'Error al autenticar con Google', error: error.message });
   }
 };
 
-/**
- * Refrescar token JWT.
- * - Valida que se proporcione un token válido.
- * - Verifica que el usuario asociado al token aún exista en la base de datos.
- * - Genera un nuevo token JWT.
- */
+// Refresh token
 exports.refreshToken = async (req, res) => {
   const authHeader = req.headers.authorization;
   
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ message: 'Token no proporcionado' }); // Aquí está la validación de token no proporcionado
+    return res.status(401).json({ message: 'Token no proporcionado' });
   }
 
   const token = authHeader.split(' ')[1];
   
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET, { ignoreExpiration: true }); // Aquí está la validación de token expirado o inválido
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, { ignoreExpiration: true });
     const usuario = await Usuario.obtenerPorId(decoded.id);
     
     if (!usuario) {
-      return res.status(404).json({ message: 'Usuario no encontrado' }); // Aquí está la validación de usuario eliminado
+      return res.status(404).json({ message: 'Usuario no encontrado' });
     }
 
     const newToken = jwt.sign(
-      { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
+      { 
+        id: usuario.id, 
+        correo: usuario.correo, 
+        rol_id: usuario.rol_id,
+        rol_nombre: usuario.rol_nombre 
+      },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
     );
@@ -279,20 +298,16 @@ exports.refreshToken = async (req, res) => {
         id: usuario.id,
         nombre: usuario.nombre,
         correo: usuario.correo,
-        rol: usuario.rol
+        rol_id: usuario.rol_id,
+        rol_nombre: usuario.rol_nombre
       }
     });
   } catch (error) {
-    res.status(401).json({ message: 'Token inválido o expirado' });
+    res.status(401).json({ message: 'Token inválido' });
   }
 };
 
-/**
- * Cambiar contraseña de un usuario.
- * - Valida que la contraseña actual sea correcta (excepto para primer cambio).
- * - Hashea la nueva contraseña antes de actualizarla en la base de datos.
- * - Desactiva la bandera `cambiar_contrasena` después del cambio.
- */
+// Cambiar contraseña
 exports.cambiarContrasena = async (req, res) => {
   const { id } = req.user;
   const { contrasena_actual, nueva_contrasena } = req.body;
@@ -300,143 +315,91 @@ exports.cambiarContrasena = async (req, res) => {
   try {
     const usuario = await Usuario.obtenerPorId(id);
     
-    // Validar contraseña actual (excepto para primer cambio)
     if (!usuario.cambiar_contrasena) {
-      const valida = await bcrypt.compare(contrasena_actual, usuario.contrasena); // Aquí está la validación de contraseña incorrecta
-      if (!valida) return res.status(401).json({ message: 'Contraseña actual incorrecta' });
+      const valida = await bcrypt.compare(contrasena_actual, usuario.contrasena);
+      if (!valida) {
+        return res.status(401).json({ message: 'Contraseña actual incorrecta' });
+      }
     }
 
     const hashed = await bcrypt.hash(nueva_contrasena, 10);
     await Usuario.actualizar(id, { 
       contrasena: hashed,
-      cambiar_contrasena: false // Desactivar la bandera de cambio de contraseña
+      cambiar_contrasena: false
     });
 
-    res.json({ message: 'Contraseña actualizada' });
+    res.json({ message: 'Contraseña actualizada exitosamente' });
   } catch (error) {
-    res.status(500).json({ message: 'Error al cambiar contraseña' });
+    res.status(500).json({ message: 'Error al cambiar contraseña', error: error.message });
   }
 };
 
-// Obtener todos los usuarios (solo admin)
+// Obtener todos los usuarios (admin)
 exports.consultarUsuarios = async (req, res) => {
   try {
     const usuarios = await Usuario.obtenerTodos();
     res.status(200).json(usuarios);
   } catch (error) {
-    res.status(500).json({ message: 'Error al consultar usuarios', error: error.message });
+    res.status(500).json({ message: 'Error al obtener usuarios', error: error.message });
   }
 };
 
-/**
- * Eliminar un usuario (eliminado lógico).
- * - Valida que el usuario exista en la base de datos.
- * - Verifica que el usuario no tenga el rol "cliente".
- * - Actualiza el campo `activo` a `false`.
- * - Devuelve los datos del usuario desactivado.
- */
+// Eliminar usuario (admin)
 exports.eliminarUsuario = async (req, res) => {
   const { id } = req.params;
   try {
-    // Obtener el usuario por ID
     const usuario = await Usuario.obtenerPorId(id);
     if (!usuario) {
       return res.status(404).json({ message: 'Usuario no encontrado' });
     }
 
-    // Verificar si el usuario tiene el rol "cliente"
-    if (usuario.rol === 'cliente') {
-      console.log('Intento de eliminar un usuario con rol cliente:', usuario);
-      return res.status(400).json({ message: 'No se puede desactivar un usuario con rol "cliente".' });
+    if (usuario.rol_nombre === 'cliente') {
+      return res.status(400).json({ message: 'No se puede desactivar clientes' });
     }
 
-    // Desactivar el usuario (eliminado lógico)
     const usuarioDesactivado = await Usuario.eliminar(id);
     res.status(200).json({ 
       message: 'Usuario desactivado', 
       usuario: usuarioDesactivado 
     });
   } catch (error) {
-    res.status(500).json({ 
-      message: 'Error al desactivar usuario', 
-      error: error.message 
-    });
+    res.status(500).json({ message: 'Error al desactivar usuario', error: error.message });
   }
 };
 
-// Actualizar usuario (solo admin o el mismo usuario)
+// Actualizar usuario
 exports.actualizarUsuario = async (req, res) => {
   const { id } = req.params;
   const datos = req.body;
   
   try {
-    // Evita que usuarios no admin cambien roles
-    if (req.user.rol !== 'admin' && datos.rol) {
-      delete datos.rol;
+    // Solo admin puede cambiar roles
+    if (req.user.rol_id !== 1 && datos.rol_id) { // Asumiendo que admin tiene id=1
+      delete datos.rol_id;
     }
 
     const usuarioActualizado = await Usuario.actualizar(id, datos);
     if (!usuarioActualizado) {
       return res.status(404).json({ message: 'Usuario no encontrado' });
     }
-    res.status(200).json({ message: 'Usuario actualizado', usuario: usuarioActualizado });
+    
+    res.status(200).json({ 
+      message: 'Usuario actualizado', 
+      usuario: usuarioActualizado 
+    });
   } catch (error) {
     res.status(500).json({ message: 'Error al actualizar usuario', error: error.message });
   }
 };
 
-/**
- * Obtener todos los usuarios (solo accesible por admin).
- * - Valida que el usuario tenga el rol `admin`.
- * - Consulta y devuelve todos los usuarios registrados en la base de datos.
- */
-exports.consultarUsuarios = async (req, res) => {
-  try {
-    const usuarios = await Usuario.obtenerTodos();
-    res.status(200).json(usuarios);
-  } catch (error) {
-    res.status(500).json({ message: 'Error al consultar usuarios', error: error.message });
-  }
-};
-
-/**
- * Actualizar un usuario (accesible por admin o el mismo usuario).
- * - Evita que usuarios no admin cambien roles.
- * - Valida que el usuario exista antes de actualizarlo.
- * - Actualiza los datos proporcionados y devuelve el usuario actualizado.
- */
-exports.actualizarUsuario = async (req, res) => {
-  const { id } = req.params;
-  const datos = req.body;
-  
-  try {
-    // Evita que usuarios no admin cambien roles
-    if (req.user.rol !== 'admin' && datos.rol) {
-      delete datos.rol; // Aquí está la validación para evitar cambios de rol por usuarios no admin
-    }
-
-    const usuarioActualizado = await Usuario.actualizar(id, datos);
-    if (!usuarioActualizado) {
-      return res.status(404).json({ message: 'Usuario no encontrado' }); // Aquí está la validación de usuario inexistente
-    }
-    res.status(200).json({ message: 'Usuario actualizado', usuario: usuarioActualizado });
-  } catch (error) {
-    res.status(500).json({ message: 'Error al actualizar usuario', error: error.message });
-  }
-};
-
-/**
- * Buscar un usuario por ID.
- * - Valida que el usuario exista en la base de datos.
- * - Devuelve los datos del usuario encontrado.
- */
+// Obtener usuario por ID
 exports.buscarUsuarioPorId = async (req, res) => {
   const { id } = req.params;
   
   try {
     const usuario = await Usuario.obtenerPorId(id);
     if (!usuario) {
-      return res.status(404).json({ message: 'Usuario no encontrado' }); // Aquí está la validación de usuario inexistente
+      return res.status(404).json({ message: 'Usuario no encontrado' });
     }
     res.status(200).json(usuario);
   } catch (error) {
@@ -444,21 +407,55 @@ exports.buscarUsuarioPorId = async (req, res) => {
   }
 };
 
-/**
- * Buscar un usuario por correo electrónico.
- * - Valida que el usuario exista en la base de datos.
- * - Devuelve los datos del usuario encontrado.
- */
+// Obtener usuario por correo
 exports.buscarUsuarioPorCorreo = async (req, res) => {
   const { correo } = req.params;
   
   try {
     const usuario = await Usuario.obtenerPorCorreo(correo);
     if (!usuario) {
-      return res.status(404).json({ message: 'Usuario no encontrado' }); // Aquí está la validación de usuario inexistente
+      return res.status(404).json({ message: 'Usuario no encontrado' });
     }
     res.status(200).json(usuario);
   } catch (error) {
     res.status(500).json({ message: 'Error al buscar usuario', error: error.message });
+  }
+};
+
+// Direcciones del usuario
+exports.agregarDireccion = async (req, res) => {
+  try {
+    const direccionData = {
+      ...req.body,
+      usuario_id: req.user.id
+    };
+    const direccion = await Direccion.crear(direccionData);
+    res.status(201).json(direccion);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al agregar dirección', error: error.message });
+  }
+};
+
+exports.obtenerDirecciones = async (req, res) => {
+  try {
+    const direcciones = await Usuario.obtenerDirecciones(req.user.id);
+    res.json(direcciones);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al obtener direcciones', error: error.message });
+  }
+};
+
+exports.marcarDireccionPrincipal = async (req, res) => {
+  try {
+    const direccion = await Direccion.marcarComoPrincipal(
+      req.params.id,
+      req.user.id
+    );
+    if (!direccion) {
+      return res.status(404).json({ message: 'Dirección no encontrada' });
+    }
+    res.json(direccion);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al marcar dirección', error: error.message });
   }
 };
