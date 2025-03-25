@@ -4,7 +4,7 @@ const Categoria = require('../models/categoria');
 // Crear un nuevo producto
 exports.crearProducto = async (req, res) => {
   try {
-    const { nombre, descripcion, precio, id_categoria, sku, stock } = req.body;
+    const { nombre, descripcion, precio, categoria_id, sku, stock } = req.body;
     const imagen_url = req.file ? req.file.filename : req.body.imagen_url;
 
     // Validar SKU único
@@ -14,8 +14,8 @@ exports.crearProducto = async (req, res) => {
     }
 
     // Verificar si la categoría existe
-    if (id_categoria) {
-      const categoriaExistente = await Categoria.obtenerPorId(id_categoria);
+    if (categoria_id) {
+      const categoriaExistente = await Categoria.obtenerPorId(categoria_id);
       if (!categoriaExistente) {
         return res.status(404).json({ msg: 'Categoría no encontrada' });
       }
@@ -25,12 +25,20 @@ exports.crearProducto = async (req, res) => {
       nombre,
       descripcion,
       precio,
-      categoria_id: id_categoria || null,
+      categoria_id: categoria_id || null,
       imagen_url,
       stock,
       sku,
-      creado_por: req.user.id, // Registrar quién creó el producto
+      creado_por: req.user.id
     });
+
+    // Registrar en auditoría
+    await Producto.registrarAuditoriaProducto(
+      nuevoProducto.id,
+      req.user.id,
+      'crear',
+      { detalles: 'Creación de nuevo producto' }
+    );
 
     res.status(201).json(nuevoProducto);
   } catch (error) {
@@ -38,28 +46,18 @@ exports.crearProducto = async (req, res) => {
   }
 };
 
+// Obtener lista de productos
 exports.obtenerProductos = async (req, res) => {
   try {
     const { page = 1, limit = 10, categoria_id, min_precio, max_precio, disponible } = req.query;
 
-    // Validar que page y limit sean números enteros positivos
-    const pageInt = parseInt(page, 10);
-    const limitInt = parseInt(limit, 10);
-
-    if (isNaN(pageInt) || pageInt < 1) {
-      throw new Error('El parámetro "page" debe ser un número entero positivo');
-    }
-    if (isNaN(limitInt) || limitInt < 1) {
-      throw new Error('El parámetro "limit" debe ser un número entero positivo');
-    }
-
     const productos = await Producto.obtenerProductos({
-      page: pageInt,
-      limit: limitInt,
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10),
       categoria_id,
-      min_precio: parseFloat(min_precio),
-      max_precio: parseFloat(max_precio),
-      disponible: disponible === 'true',
+      min_precio: min_precio ? parseFloat(min_precio) : undefined,
+      max_precio: max_precio ? parseFloat(max_precio) : undefined,
+      disponible: disponible === 'true'
     });
 
     res.status(200).json(productos);
@@ -100,12 +98,13 @@ exports.buscarProductosPorNombre = async (req, res) => {
   }
 };
 
+// Actualizar un producto
 exports.actualizarProducto = async (req, res) => {
   try {
     const { id } = req.params;
     const datosActualizacion = req.body;
 
-    // Lista de campos permitidos para actualización
+    // Campos permitidos para actualización
     const camposPermitidos = ['nombre', 'descripcion', 'precio', 'stock', 'imagen_url', 'categoria_id'];
     const datosFiltrados = Object.keys(datosActualizacion)
       .filter(key => camposPermitidos.includes(key))
@@ -124,13 +123,13 @@ exports.actualizarProducto = async (req, res) => {
       return res.status(404).json({ msg: 'Producto no encontrado' });
     }
 
-    // Registrar quién actualizó el producto
+    // Agregar usuario que modifica
     datosFiltrados.modificado_por = req.user.id;
 
     // Actualizar el producto
     const productoActualizado = await Producto.actualizarProducto(id, datosFiltrados);
 
-    // Registrar la acción en la auditoría
+    // Registrar en auditoría
     await Producto.registrarAuditoriaProducto(
       id,
       req.user.id,
@@ -144,6 +143,7 @@ exports.actualizarProducto = async (req, res) => {
   }
 };
 
+// Aumentar stock de un producto
 exports.aumentarStockProducto = async (req, res) => {
   try {
     const { id } = req.params;
@@ -153,22 +153,19 @@ exports.aumentarStockProducto = async (req, res) => {
       return res.status(400).json({ msg: 'El campo "cantidad" es obligatorio y debe ser un número positivo' });
     }
 
-    // Obtener el producto antes de aumentar el stock
     const producto = await Producto.obtenerProductoPorId(id);
     if (!producto) {
       return res.status(404).json({ msg: 'Producto no encontrado' });
     }
 
-    // Aumentar el stock
     const productoActualizado = await Producto.aumentarStock(id, cantidad, req.user.id);
 
-    // Registrar el cambio en el historial de stock
     await Producto.registrarHistorialStock(
       id,
       req.user.id,
-      producto.stock, // Cantidad anterior
-      productoActualizado.stock, // Cantidad nueva
-      'Aumento de stock' // Motivo
+      producto.stock,
+      productoActualizado.stock,
+      'Aumento de stock'
     );
 
     res.status(200).json(productoActualizado);
@@ -177,6 +174,7 @@ exports.aumentarStockProducto = async (req, res) => {
   }
 };
 
+// Ajustar stock de un producto
 exports.ajustarStockProducto = async (req, res) => {
   try {
     const { id } = req.params;
@@ -186,22 +184,19 @@ exports.ajustarStockProducto = async (req, res) => {
       return res.status(400).json({ msg: 'El campo "cantidad" es obligatorio y debe ser un número no negativo' });
     }
 
-    // Obtener el producto antes de ajustar el stock
     const producto = await Producto.obtenerProductoPorId(id);
     if (!producto) {
       return res.status(404).json({ msg: 'Producto no encontrado' });
     }
 
-    // Ajustar el stock
     const productoActualizado = await Producto.ajustarStock(id, cantidad, req.user.id);
 
-    // Registrar el cambio en el historial de stock
     await Producto.registrarHistorialStock(
       id,
       req.user.id,
-      producto.stock, // Cantidad anterior
-      productoActualizado.stock, // Cantidad nueva
-      'Ajuste de stock' // Motivo
+      producto.stock,
+      productoActualizado.stock,
+      'Ajuste de stock'
     );
 
     res.status(200).json(productoActualizado);
@@ -210,6 +205,7 @@ exports.ajustarStockProducto = async (req, res) => {
   }
 };
 
+// Reducir stock de un producto
 exports.reducirStockProducto = async (req, res) => {
   try {
     const { id } = req.params;
@@ -219,27 +215,23 @@ exports.reducirStockProducto = async (req, res) => {
       return res.status(400).json({ msg: 'El campo "cantidad" es obligatorio y debe ser un número positivo' });
     }
 
-    // Obtener el producto antes de reducir el stock
     const producto = await Producto.obtenerProductoPorId(id);
     if (!producto) {
       return res.status(404).json({ msg: 'Producto no encontrado' });
     }
 
-    // Validar que el stock no sea menor que la cantidad a reducir
     if (producto.stock < cantidad) {
       return res.status(400).json({ msg: 'No hay suficiente stock para reducir' });
     }
 
-    // Reducir el stock
     const productoActualizado = await Producto.reducirStock(id, cantidad, req.user.id);
 
-    // Registrar el cambio en el historial de stock
     await Producto.registrarHistorialStock(
       id,
       req.user.id,
-      producto.stock, // Cantidad anterior
-      productoActualizado.stock, // Cantidad nueva
-      'Reducción de stock' // Motivo
+      producto.stock,
+      productoActualizado.stock,
+      'Reducción de stock'
     );
 
     res.status(200).json(productoActualizado);
@@ -248,6 +240,7 @@ exports.reducirStockProducto = async (req, res) => {
   }
 };
 
+// Obtener historial de stock de un producto
 exports.obtenerHistorialStock = async (req, res) => {
   try {
     const { id } = req.params;
@@ -258,6 +251,7 @@ exports.obtenerHistorialStock = async (req, res) => {
   }
 };
 
+// Obtener auditoría de un producto
 exports.obtenerAuditoriaProducto = async (req, res) => {
   try {
     const { id } = req.params;
@@ -268,25 +262,22 @@ exports.obtenerAuditoriaProducto = async (req, res) => {
   }
 };
 
-
+// Eliminar (marcar como inactivo) un producto
 exports.eliminarProducto = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Obtener el producto antes de marcarlo como inactivo
     const producto = await Producto.obtenerProductoPorId(id);
     if (!producto) {
       return res.status(404).json({ msg: 'Producto no encontrado' });
     }
 
-    // Marcar el producto como inactivo
     const productoEliminado = await Producto.eliminarProducto(id, req.user.id);
 
-    // Registrar la acción en la auditoría
     await Producto.registrarAuditoriaProducto(
       id,
       req.user.id,
-      'eliminar_logico', // Usar 'eliminar_logico' en lugar de 'eliminar'
+      'eliminar_logico',
       { detalles: 'Producto marcado como inactivo' }
     );
 
@@ -296,16 +287,15 @@ exports.eliminarProducto = async (req, res) => {
   }
 };
 
+// Obtener producto por SKU
 exports.obtenerProductoPorSku = async (req, res) => {
   try {
     const { sku } = req.params;
 
-    // Validar que el SKU no esté vacío
     if (!sku || typeof sku !== 'string' || sku.trim() === '') {
       return res.status(400).json({ msg: 'El SKU es obligatorio y debe ser una cadena de texto válida' });
     }
 
-    // Obtener el producto por SKU
     const producto = await Producto.obtenerProductoPorSku(sku.trim());
 
     if (!producto) {
@@ -315,5 +305,130 @@ exports.obtenerProductoPorSku = async (req, res) => {
     res.status(200).json(producto);
   } catch (error) {
     res.status(500).json({ msg: 'Error al obtener el producto por SKU', error: error.message });
+  }
+};
+
+// Agregar proveedor a un producto
+exports.agregarProveedor = async (req, res) => {
+  try {
+    const { producto_id } = req.params;
+    const { proveedor_id, precio_compra, codigo_proveedor } = req.body;
+
+    // Validaciones
+    if (!proveedor_id || !precio_compra) {
+      return res.status(400).json({ 
+        success: false,
+        msg: 'proveedor_id y precio_compra son requeridos' 
+      });
+    }
+
+    const relacion = await Producto.agregarProveedor(
+      producto_id,
+      proveedor_id,
+      precio_compra,
+      codigo_proveedor
+    );
+
+    res.status(201).json({
+      success: true,
+      msg: 'Proveedor agregado al producto',
+      data: relacion
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      msg: 'Error al agregar proveedor al producto',
+      error: error.message
+    });
+  }
+};
+
+// Eliminar proveedor de un producto
+exports.eliminarProveedor = async (req, res) => {
+  try {
+    const { producto_id, proveedor_id } = req.params;
+
+    const resultado = await Producto.eliminarProveedor(producto_id, proveedor_id);
+
+    if (!resultado) {
+      return res.status(404).json({
+        success: false,
+        msg: 'Relación no encontrada'
+      });
+    }
+
+    res.json({
+      success: true,
+      msg: 'Proveedor eliminado del producto',
+      data: resultado
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      msg: 'Error al eliminar proveedor del producto',
+      error: error.message
+    });
+  }
+};
+
+// Obtener proveedores de un producto
+exports.obtenerProveedores = async (req, res) => {
+  try {
+    const { producto_id } = req.params;
+
+    const proveedores = await Producto.obtenerProveedores(producto_id);
+
+    res.json({
+      success: true,
+      count: proveedores.length,
+      data: proveedores
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      msg: 'Error al obtener proveedores del producto',
+      error: error.message
+    });
+  }
+};
+
+// Actualizar relación con proveedor
+exports.actualizarProveedorProducto = async (req, res) => {
+  try {
+    const { producto_id, proveedor_id } = req.params;
+    const { precio_compra, codigo_proveedor } = req.body;
+
+    if (!precio_compra) {
+      return res.status(400).json({
+        success: false,
+        msg: 'precio_compra es requerido'
+      });
+    }
+
+    const relacion = await Producto.actualizarProveedorProducto(
+      producto_id,
+      proveedor_id,
+      precio_compra,
+      codigo_proveedor
+    );
+
+    if (!relacion) {
+      return res.status(404).json({
+        success: false,
+        msg: 'Relación no encontrada'
+      });
+    }
+
+    res.json({
+      success: true,
+      msg: 'Relación con proveedor actualizada',
+      data: relacion
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      msg: 'Error al actualizar relación con proveedor',
+      error: error.message
+    });
   }
 };

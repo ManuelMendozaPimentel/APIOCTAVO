@@ -3,14 +3,7 @@ const pool = require('../config/db');
 class Producto {
   /**
    * Crea un nuevo producto en la base de datos.
-   * Escenarios cubiertos:
-   * - Creación exitosa de un producto.
-   * - Validación de SKU único (evita duplicados).
-   * 
-   * Validaciones:
-   * - El SKU debe ser único (se lanza un error si ya existe).
-   * 
-   * @param {Object} datos - Datos del producto (nombre, descripcion, precio, categoria_id, imagen_url, stock, sku, creado_por).
+   * @param {Object} datos - Datos del producto.
    * @returns {Object} - El producto creado.
    */
   static async crearProducto({ nombre, descripcion, precio, categoria_id, imagen_url, stock, sku, creado_por }) {
@@ -31,19 +24,11 @@ class Producto {
   }
 
   /**
-   * Obtiene una lista de productos con paginación y filtros opcionales.
-   * Escenarios cubiertos:
-   * - Obtener todos los productos.
-   * - Filtrar por categoría, precio mínimo, precio máximo, disponibilidad y estado activo/inactivo.
-   * 
-   * Validaciones:
-   * - `page` y `limit` deben ser números enteros positivos.
-   * 
-   * @param {Object} opciones - Opciones de filtrado y paginación (page, limit, categoria_id, min_precio, max_precio, disponible, activo).
+   * Obtiene una lista de productos con paginación y filtros.
+   * @param {Object} opciones - Opciones de filtrado y paginación.
    * @returns {Array} - Lista de productos.
    */
   static async obtenerProductos({ page = 1, limit = 10, categoria_id, min_precio, max_precio, disponible } = {}) {
-    // Validar parámetros
     if (isNaN(page) || page < 1) throw new Error('El parámetro "page" debe ser un número entero positivo');
     if (isNaN(limit) || limit < 1) throw new Error('El parámetro "limit" debe ser un número entero positivo');
   
@@ -56,7 +41,6 @@ class Producto {
     const values = [];
     let paramIndex = 1;
   
-    // Filtros adicionales
     if (categoria_id) {
       query += ` AND p.categoria_id = $${paramIndex}`;
       values.push(parseInt(categoria_id, 10));
@@ -79,7 +63,6 @@ class Producto {
       query += ` AND p.stock > 0`;
     }
   
-    // Paginación
     query += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
     values.push(parseInt(limit, 10), (parseInt(page, 10) - 1) * parseInt(limit, 10));
   
@@ -93,10 +76,6 @@ class Producto {
 
   /**
    * Obtiene un producto por su ID.
-   * Escenarios cubiertos:
-   * - Obtener un producto existente.
-   * - Producto no encontrado.
-   * 
    * @param {number} id - ID del producto.
    * @returns {Object} - El producto encontrado.
    */
@@ -113,16 +92,9 @@ class Producto {
   }
 
   /**
-   * Busca productos por nombre (búsqueda insensible a mayúsculas/minúsculas).
-   * Escenarios cubiertos:
-   * - Búsqueda exitosa.
-   * - Validación de nombre vacío o inválido.
-   * 
-   * Validaciones:
-   * - El nombre debe ser una cadena de texto no vacía.
-   * 
+   * Busca productos por nombre.
    * @param {string} nombre - Nombre o parte del nombre del producto.
-   * @returns {Array} - Lista de productos que coinciden con la búsqueda.
+   * @returns {Array} - Lista de productos que coinciden.
    */
   static async buscarProductosPorNombre(nombre) {
     if (!nombre || typeof nombre !== 'string' || nombre.trim() === '') {
@@ -133,7 +105,7 @@ class Producto {
       SELECT p.*, c.nombre AS nombre_categoria, c.descripcion AS descripcion_categoria
       FROM productos p
       LEFT JOIN categorias c ON p.categoria_id = c.id
-      WHERE p.nombre ILIKE $1;
+      WHERE p.nombre ILIKE $1 AND p.activo = true;
     `;
     const values = [`%${nombre.trim()}%`];
 
@@ -147,15 +119,8 @@ class Producto {
 
   /**
    * Actualiza un producto existente.
-   * Escenarios cubiertos:
-   * - Actualización exitosa.
-   * - Validación de campos vacíos o no permitidos.
-   * 
-   * Validaciones:
-   * - Se debe proporcionar al menos un campo para actualizar.
-   * 
    * @param {number} id - ID del producto.
-   * @param {Object} datos - Campos a actualizar (nombre, descripcion, precio, stock, imagen_url, categoria_id).
+   * @param {Object} datos - Campos a actualizar.
    * @returns {Object} - El producto actualizado.
    */
   static async actualizarProducto(id, datos) {
@@ -178,23 +143,17 @@ class Producto {
     values.push(id);
     const query = `
       UPDATE productos
-      SET ${updates.join(', ')}
+      SET ${updates.join(', ')}, modificado_por = $${paramIndex + 1}
       WHERE id = $${paramIndex}
       RETURNING *;
     `;
+    values.push(datos.modificado_por);
     const result = await pool.query(query, values);
     return result.rows[0];
   }
 
   /**
    * Aumenta el stock de un producto.
-   * Escenarios cubiertos:
-   * - Aumento exitoso del stock.
-   * - Validación de cantidad inválida.
-   * 
-   * Validaciones:
-   * - La cantidad debe ser un número positivo.
-   * 
    * @param {number} id - ID del producto.
    * @param {number} cantidad - Cantidad a aumentar.
    * @param {number} modificadoPor - ID del usuario que realiza la modificación.
@@ -219,13 +178,6 @@ class Producto {
 
   /**
    * Ajusta el stock de un producto a un valor específico.
-   * Escenarios cubiertos:
-   * - Ajuste exitoso del stock.
-   * - Validación de cantidad inválida.
-   * 
-   * Validaciones:
-   * - La cantidad debe ser un número no negativo.
-   * 
    * @param {number} id - ID del producto.
    * @param {number} cantidad - Nuevo valor del stock.
    * @param {number} modificadoPor - ID del usuario que realiza la modificación.
@@ -250,14 +202,6 @@ class Producto {
 
   /**
    * Reduce el stock de un producto.
-   * Escenarios cubiertos:
-   * - Reducción exitosa del stock.
-   * - Validación de cantidad inválida o insuficiente stock.
-   * 
-   * Validaciones:
-   * - La cantidad debe ser un número positivo.
-   * - El stock no puede ser menor que la cantidad a reducir.
-   * 
    * @param {number} id - ID del producto.
    * @param {number} cantidad - Cantidad a reducir.
    * @param {number} modificadoPor - ID del usuario que realiza la modificación.
@@ -282,10 +226,6 @@ class Producto {
 
   /**
    * Marca un producto como inactivo (eliminación lógica).
-   * Escenarios cubiertos:
-   * - Marcado exitoso como inactivo.
-   * - Validación de producto no encontrado.
-   * 
    * @param {number} id - ID del producto.
    * @param {number} modificadoPor - ID del usuario que realiza la modificación.
    * @returns {Object} - El producto marcado como inactivo.
@@ -306,15 +246,11 @@ class Producto {
 
   /**
    * Obtiene un producto por su SKU.
-   * Escenarios cubiertos:
-   * - Producto encontrado.
-   * - Producto no encontrado.
-   * 
    * @param {string} sku - SKU del producto.
    * @returns {Object} - El producto encontrado.
    */
   static async obtenerProductoPorSku(sku) {
-    const query = 'SELECT * FROM productos WHERE sku = $1';
+    const query = 'SELECT * FROM productos WHERE sku = $1 AND activo = true';
     const values = [sku];
     try {
       const result = await pool.query(query, values);
@@ -326,38 +262,32 @@ class Producto {
 
   /**
    * Registra un cambio en la auditoría de productos.
-   * Escenarios cubiertos:
-   * - Registro exitoso de la acción en la auditoría.
-   * 
    * @param {number} producto_id - ID del producto.
-   * @param {number} usuario_id - ID del usuario que realiza la acción.
-   * @param {string} accion - Tipo de acción (crear, actualizar, eliminar_logico).
-   * @param {Object} detalles - Detalles del cambio (puede ser un objeto JSON).
+   * @param {number} usuario_id - ID del usuario.
+   * @param {string} accion - Tipo de acción.
+   * @param {Object} detalles - Detalles del cambio.
    */
   static async registrarAuditoriaProducto(producto_id, usuario_id, accion, detalles) {
     const query = `
       INSERT INTO auditoria_productos (producto_id, usuario_id, accion, detalles)
-      VALUES ($1, $2, $3, $4) RETURNING *;
+      VALUES ($1, $2, $3, $4);
     `;
-    const values = [producto_id, usuario_id, accion, detalles];
+    const values = [producto_id, usuario_id, accion, JSON.stringify(detalles)];
     await pool.query(query, values);
   }
 
   /**
    * Registra un cambio en el historial de stock.
-   * Escenarios cubiertos:
-   * - Registro exitoso del cambio en el historial de stock.
-   * 
    * @param {number} producto_id - ID del producto.
-   * @param {number} usuario_id - ID del usuario que realiza la acción.
-   * @param {number} cantidad_anterior - Cantidad de stock antes del cambio.
-   * @param {number} cantidad_nueva - Cantidad de stock después del cambio.
-   * @param {string} motivo - Motivo del cambio (ej: "Aumento de stock").
+   * @param {number} usuario_id - ID del usuario.
+   * @param {number} cantidad_anterior - Stock anterior.
+   * @param {number} cantidad_nueva - Stock nuevo.
+   * @param {string} motivo - Motivo del cambio.
    */
   static async registrarHistorialStock(producto_id, usuario_id, cantidad_anterior, cantidad_nueva, motivo) {
     const query = `
       INSERT INTO historial_stock (producto_id, usuario_id, cantidad_anterior, cantidad_nueva, motivo)
-      VALUES ($1, $2, $3, $4, $5) RETURNING *;
+      VALUES ($1, $2, $3, $4, $5);
     `;
     const values = [producto_id, usuario_id, cantidad_anterior, cantidad_nueva, motivo];
     await pool.query(query, values);
@@ -365,18 +295,16 @@ class Producto {
 
   /**
    * Obtiene el historial de cambios en el stock de un producto.
-   * Escenarios cubiertos:
-   * - Historial encontrado.
-   * - Historial vacío (sin cambios registrados).
-   * 
    * @param {number} producto_id - ID del producto.
-   * @returns {Array} - Lista de cambios en el historial de stock.
+   * @returns {Array} - Lista de cambios en el stock.
    */
   static async obtenerHistorialStock(producto_id) {
     const query = `
-      SELECT * FROM historial_stock
-      WHERE producto_id = $1
-      ORDER BY fecha DESC;
+      SELECT h.*, u.nombre AS nombre_usuario
+      FROM historial_stock h
+      LEFT JOIN usuarios u ON h.usuario_id = u.id
+      WHERE h.producto_id = $1
+      ORDER BY h.fecha DESC;
     `;
     const values = [producto_id];
     const result = await pool.query(query, values);
@@ -385,34 +313,69 @@ class Producto {
 
   /**
    * Obtiene la auditoría de cambios de un producto.
-   * Escenarios cubiertos:
-   * - Auditoría encontrada.
-   * - Auditoría vacía (sin cambios registrados).
-   * 
    * @param {number} producto_id - ID del producto.
    * @returns {Array} - Lista de cambios en la auditoría.
    */
   static async obtenerAuditoriaProducto(producto_id) {
     const query = `
-      SELECT * FROM auditoria_productos
-      WHERE producto_id = $1
-      ORDER BY fecha DESC;
+      SELECT a.*, u.nombre AS nombre_usuario
+      FROM auditoria_productos a
+      LEFT JOIN usuarios u ON a.usuario_id = u.id
+      WHERE a.producto_id = $1
+      ORDER BY a.fecha DESC;
     `;
     const values = [producto_id];
     const result = await pool.query(query, values);
     return result.rows;
   }
-  
-  static async obtenerProductoPorSku(sku) {
-    const query = 'SELECT * FROM productos WHERE sku = $1';
-    const values = [sku];
-    try {
-      const result = await pool.query(query, values);
-      return result.rows[0];
-    } catch (error) {
-      throw new Error('Error al verificar el SKU');
-    }
-  }
+
+
+  // En models/producto.js
+static async agregarProveedor(producto_id, proveedor_id, precio_compra, codigo_proveedor) {
+  const query = `
+    INSERT INTO productos_proveedores (producto_id, proveedor_id, precio_compra, codigo_proveedor)
+    VALUES ($1, $2, $3, $4)
+    RETURNING *;
+  `;
+  const values = [producto_id, proveedor_id, precio_compra, codigo_proveedor];
+  const result = await pool.query(query, values);
+  return result.rows[0];
+}
+
+static async eliminarProveedor(producto_id, proveedor_id) {
+  const query = `
+    DELETE FROM productos_proveedores
+    WHERE producto_id = $1 AND proveedor_id = $2
+    RETURNING *;
+  `;
+  const values = [producto_id, proveedor_id];
+  const result = await pool.query(query, values);
+  return result.rows[0];
+}
+
+static async obtenerProveedores(producto_id) {
+  const query = `
+    SELECT pp.*, p.nombre AS nombre_proveedor, p.telefono, p.correo
+    FROM productos_proveedores pp
+    JOIN proveedores p ON pp.proveedor_id = p.id
+    WHERE pp.producto_id = $1 AND p.activo = true;
+  `;
+  const values = [producto_id];
+  const result = await pool.query(query, values);
+  return result.rows;
+}
+
+static async actualizarProveedorProducto(producto_id, proveedor_id, precio_compra, codigo_proveedor) {
+  const query = `
+    UPDATE productos_proveedores
+    SET precio_compra = $3, codigo_proveedor = $4
+    WHERE producto_id = $1 AND proveedor_id = $2
+    RETURNING *;
+  `;
+  const values = [producto_id, proveedor_id, precio_compra, codigo_proveedor];
+  const result = await pool.query(query, values);
+  return result.rows[0];
+}
 }
 
 module.exports = Producto;
