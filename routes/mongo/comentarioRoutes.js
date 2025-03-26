@@ -1,14 +1,29 @@
 const express = require('express');
 const comentarioController = require('../../controllers/mongo/comentarioController');
-const { verificarToken } = require('../../middleware/authMiddleware'); // Importa el middleware
+const { verificarToken, verificarRol } = require('../../middleware/authMiddleware');
 const router = express.Router();
 
-// Aplica el middleware verificarToken a las rutas que requieren autenticación
-router.post('/', verificarToken, comentarioController.crearComentario);
-router.post('/:id/like', verificarToken, comentarioController.darLike);
-router.post('/:id/reportar', verificarToken, comentarioController.reportarComentario);
+// Crear comentario
+router.post('/', 
+  verificarToken, 
+  comentarioController.crearComentario
+);
 
-// Esta ruta no requiere autenticación
-router.get('/servicio/:servicioId', comentarioController.obtenerComentariosPorServicio);
+// Dar like
+router.post('/:id/like', 
+  verificarToken, 
+  comentarioController.darLike
+);
+
+// Reportar comentario
+router.post('/:id/reportar', 
+  verificarToken, 
+  comentarioController.reportarComentario
+);
+
+// Obtener comentarios por servicio (pública)
+router.get('/servicio/:servicioId', 
+  comentarioController.obtenerComentariosPorServicio
+);
 
 module.exports = router;

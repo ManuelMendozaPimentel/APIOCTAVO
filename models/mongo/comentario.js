@@ -1,65 +1,73 @@
 const mongoose = require('mongoose');
-const verificarUsuarioPostgreSQL = require('../../utils/verificarUsuarioPostgreSQL'); 
+const verificarUsuarioPostgreSQL = require('../../utils/verificarUsuarioPostgreSQL');
+const verificarServicioPostgreSQL = require('../../utils/verificarServicioPostgreSQL'); // Nuevo helper
 
 const comentarioSchema = new mongoose.Schema({
-  // 1. Referencia al servicio (MongoDB)
-  servicio: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Servicio',
+  // 1. Referencia al servicio en PostgreSQL (cambiamos de ObjectId a Number)
+  servicio_id: {
+    type: Number,
     required: true,
   },
 
-  // 2. Referencia al usuario (solo id_pg de PostgreSQL)
-  usuario: {
-    id_pg: { type: Number, required: true }, // Solo referencia al usuario en PostgreSQL
+  // 2. Referencia al usuario (solo id de PostgreSQL)
+  usuario_id: {
+    type: Number,
+    required: true,
   },
 
   // 3. Contenido del comentario
-  contenido: { type: String, required: true, maxlength: 500 }, // Límite de caracteres
+  contenido: {
+    type: String,
+    required: true,
+    maxlength: 500
+  },
 
-  // 4. Respuestas normalizadas (en lugar de embebidas)
-  respuestas: [
-    {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Respuesta', // Colección separada para respuestas
-    },
-  ],
+  // 4. Respuestas (mantenemos en MongoDB)
+  respuestas: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Respuesta',
+  }],
 
-  // 5. Likes como array de usuarios (id_pg de PostgreSQL)
-  likes: [{ type: Number }], // Array de id_pg de usuarios que dieron like
+  // 5. Likes como array de usuarios (id de PostgreSQL)
+  likes: [{
+    type: Number
+  }],
 
-  // 6. Estado del comentario (activo o eliminado)
+  // 6. Estado del comentario
   estado: {
     type: String,
     enum: ['activo', 'eliminado'],
     default: 'activo',
   },
 
-  // 7. Auditoría para eliminación
-  eliminado_por: Number, // id_pg del usuario que eliminó el comentario
-  motivo_eliminacion: String, // Razón de la eliminación
-  fecha_creacion: { type: Date, default: Date.now }, // Fecha de creación
-  fecha_eliminacion: Date, // Fecha de eliminación (si aplica)
+  // 7. Auditoría
+  eliminado_por: Number,
+  motivo_eliminacion: String,
+  fecha_creacion: {
+    type: Date,
+    default: Date.now
+  },
+  fecha_eliminacion: Date,
 });
 
-// 8. Índices para consultas frecuentes
-comentarioSchema.index({ servicio: 1, fecha_creacion: -1 }); // Ordenar por servicio y fecha
-comentarioSchema.index({ 'usuario.id_pg': 1 }); // Búsqueda por usuario
+// Índices actualizados
+comentarioSchema.index({ servicio_id: 1, fecha_creacion: -1 });
+comentarioSchema.index({ usuario_id: 1 });
 
 comentarioSchema.pre('save', async function (next) {
-    // Validar que el servicio exista en MongoDB
-    const servicioExists = await mongoose.model('Servicio').exists({ _id: this.servicio });
-    if (!servicioExists) {
-      throw new Error('El servicio referenciado no existe');
-    }
-  
-    // Validar que el usuario exista en PostgreSQL
-    const usuarioExists = await verificarUsuarioPostgreSQL(this.usuario.id_pg);
-    if (!usuarioExists) {
-      throw new Error('El usuario referenciado no existe');
-    }
-  
-    next();
-  });
+  // Validar que el servicio exista en PostgreSQL
+  const servicioExists = await verificarServicioPostgreSQL(this.servicio_id);
+  if (!servicioExists) {
+    throw new Error('El servicio referenciado no existe');
+  }
 
-module.exports = mongoose.model('Comentario', comentarioSchema);
+  // Validar que el usuario exista en PostgreSQL
+  const usuarioExists = await verificarUsuarioPostgreSQL(this.usuario_id);
+  if (!usuarioExists) {
+    throw new Error('El usuario referenciado no existe');
+  }
+
+  next();
+});
+
+module.exports = mongoose.model('Comentario', comentarioSchema);  
