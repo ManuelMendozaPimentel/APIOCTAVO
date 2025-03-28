@@ -209,7 +209,6 @@ exports.loginUsuario = async (req, res) => {
   }
 };
 
-// Login con Google
 exports.loginUsuarioGoogle = async (req, res) => {
   const { idToken } = req.body;
   
@@ -221,50 +220,62 @@ exports.loginUsuarioGoogle = async (req, res) => {
     const payload = ticket.getPayload();
 
     let usuario = await Usuario.obtenerPorCorreo(payload.email);
+    
     if (!usuario) {
-      // Obtener ID del rol cliente (asumimos que es 3)
-      const rolCliente = await Rol.obtenerPorId(3);
-      if (!rolCliente) {
-        return res.status(500).json({ message: 'Configuración de roles incorrecta' });
-      }
-
+      // Crear nuevo usuario con Google
       usuario = await Usuario.crear({
-        nombre: payload.given_name,
-        apellidos: payload.family_name || '',
+        nombre: payload.given_name || payload.name.split(' ')[0],
+        apellidos: payload.family_name || payload.name.split(' ')[1] || '',
         correo: payload.email,
-        google_id: payload.sub,
-        rol_id: rolCliente.id,
-        cambiar_contrasena: false
+        google_id: payload.sub, // Guardamos el ID de Google
+        rol_id: 2, // Rol cliente
+        cambiar_contrasena: false,
+        contrasena: null // Explicitamente null para usuarios de Google
       });
+    } else {
+      // Actualizar google_id si el usuario existe pero no lo tiene
+      if (!usuario.google_id) {
+        await Usuario.actualizar(usuario.id, { google_id: payload.sub });
+        usuario.google_id = payload.sub;
+      }
     }
 
+    // Generar token JWT
     const token = jwt.sign(
       { 
         id: usuario.id, 
         correo: usuario.correo, 
         rol_id: usuario.rol_id,
-        rol_nombre: usuario.rol_nombre 
+        rol_nombre: 'cliente'
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
     );
 
     res.status(200).json({ 
-      message: 'Login exitoso', 
+      success: true,
+      message: '¡Bienvenido!', 
       token,
       user: {
         id: usuario.id,
         nombre: usuario.nombre,
+        apellidos: usuario.apellidos,
         correo: usuario.correo,
-        rol_id: usuario.rol_id,
-        rol_nombre: usuario.rol_nombre
+        google_id: usuario.google_id,
+        rol_id: 2,
+        rol_nombre: 'cliente'
       }
     });
+
   } catch (error) {
-    res.status(500).json({ message: 'Error al autenticar con Google', error: error.message });
+    console.error('Error en login con Google:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error al iniciar sesión con Google',
+      error: process.env.NODE_ENV === 'development' ? error.message : null
+    });
   }
 };
-
 // Refresh token
 exports.refreshToken = async (req, res) => {
   const authHeader = req.headers.authorization;

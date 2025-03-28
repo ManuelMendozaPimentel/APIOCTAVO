@@ -34,34 +34,56 @@ class Usuario {
       nombre, 
       apellidos, 
       correo, 
-      contrasena, 
-      telefono, 
+      contrasena = null, // Valor por defecto null para usuarios de Google
+      telefono = null, 
       rol_id = 2, // Valor por defecto para rol_id (cliente)
       cambiar_contrasena = false,
-      activo = true
+      activo = true,
+      google_id = null // Nuevo campo para Google ID
     } = usuario;
+  
+    // Construir la consulta dinámicamente para manejar campos opcionales
+    const campos = [];
+    const valores = [];
+    let indice = 1;
+  
+    // Campos obligatorios
+    campos.push('nombre', 'apellidos', 'correo', 'rol_id');
+    valores.push(nombre, apellidos, correo, rol_id);
+  
+    // Campos condicionales
+    if (google_id) {
+      campos.push('google_id');
+      valores.push(google_id);
+    }
+  
+    if (contrasena) {
+      campos.push('contrasena');
+      valores.push(contrasena);
+    }
+  
+    if (telefono) {
+      campos.push('telefono');
+      valores.push(telefono);
+    }
+  
+    // Campos con valores por defecto
+    campos.push('cambiar_contrasena', 'activo');
+    valores.push(cambiar_contrasena, activo);
+  
+    // Construir la parte de los placeholders
+    const placeholders = valores.map((_, i) => `$${i + 1}`).join(', ');
   
     const query = `
       INSERT INTO usuarios 
-        (nombre, apellidos, correo, contrasena, telefono, rol_id, cambiar_contrasena, activo)
+        (${campos.join(', ')})
       VALUES 
-        ($1, $2, $3, $4, $5, $6, $7, $8)
-      RETURNING id, nombre, apellidos, correo, telefono, rol_id
+        (${placeholders})
+      RETURNING id, nombre, apellidos, correo, telefono, rol_id, google_id
     `;
   
-    const values = [
-      nombre,
-      apellidos,
-      correo,
-      contrasena,
-      telefono,
-      rol_id,
-      cambiar_contrasena,
-      activo
-    ];
-  
     try {
-      const result = await pool.query(query, values);
+      const result = await pool.query(query, valores);
       return result.rows[0];
     } catch (error) {
       console.error('Error al crear usuario:', error);
