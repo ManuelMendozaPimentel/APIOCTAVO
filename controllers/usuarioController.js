@@ -94,11 +94,8 @@ exports.registrarUsuario = async (req, res) => {
   const { nombre, apellidos, correo, contrasena, telefono } = req.body;
   
   try {
-    // Obtener ID del rol cliente (asumimos que es 3)
-    const rolCliente = await Rol.obtenerPorId(3);
-    if (!rolCliente) {
-      return res.status(500).json({ message: 'Configuración de roles incorrecta' });
-    }
+    // Forzar el rol_id a 2 (cliente) directamente
+    const rol_id_cliente = 2;
 
     // Verificar correo
     const usuarioExistente = await Usuario.obtenerPorCorreo(correo);
@@ -106,7 +103,7 @@ exports.registrarUsuario = async (req, res) => {
       return res.status(400).json({ message: 'El correo ya está registrado' });
     }
 
-    // Crear usuario
+    // Crear usuario con rol forzado a cliente
     const hashedPassword = await bcrypt.hash(contrasena, 10);
     const usuario = await Usuario.crear({
       nombre,
@@ -114,7 +111,7 @@ exports.registrarUsuario = async (req, res) => {
       correo,
       contrasena: hashedPassword,
       telefono,
-      rol_id: rolCliente.id,
+      rol_id: rol_id_cliente, // Forzamos el rol de cliente
       cambiar_contrasena: false
     });
 
@@ -124,7 +121,7 @@ exports.registrarUsuario = async (req, res) => {
         id: usuario.id, 
         correo: usuario.correo, 
         rol_id: usuario.rol_id,
-        rol_nombre: rolCliente.nombre 
+        rol_nombre: 'cliente' // Asumimos que es cliente
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
@@ -136,14 +133,19 @@ exports.registrarUsuario = async (req, res) => {
       usuario: {
         id: usuario.id,
         nombre: usuario.nombre,
+        apellidos: usuario.apellidos,
         correo: usuario.correo,
+        telefono: usuario.telefono,
         rol_id: usuario.rol_id,
-        rol_nombre: rolCliente.nombre
+        rol_nombre: 'cliente'
       }
     });
   } catch (error) {
     console.error('Error al registrar usuario:', error);
-    res.status(500).json({ message: 'Error al registrar usuario', error: error.message });
+    res.status(500).json({ 
+      message: 'Error al registrar usuario',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Error interno del servidor'
+    });
   }
 };
 

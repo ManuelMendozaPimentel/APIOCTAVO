@@ -29,17 +29,36 @@ class Usuario {
   }
 
   static async crear(usuario) {
-    const { nombre, apellidos, correo, contrasena, telefono, rol_id } = usuario;
+    // Asignar valores por defecto si no vienen en el objeto
+    const { 
+      nombre, 
+      apellidos, 
+      correo, 
+      contrasena, 
+      telefono, 
+      rol_id = 2, // Valor por defecto para rol_id (cliente)
+      cambiar_contrasena = false,
+      activo = true
+    } = usuario;
   
     const query = `
       INSERT INTO usuarios 
-        (nombre, apellidos, correo, contrasena, telefono, rol_id)
+        (nombre, apellidos, correo, contrasena, telefono, rol_id, cambiar_contrasena, activo)
       VALUES 
-        ($1, $2, $3, $4, $5, $6)
+        ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING id, nombre, apellidos, correo, telefono, rol_id
     `;
   
-    const values = [nombre, apellidos, correo, contrasena, telefono, rol_id];
+    const values = [
+      nombre,
+      apellidos,
+      correo,
+      contrasena,
+      telefono,
+      rol_id,
+      cambiar_contrasena,
+      activo
+    ];
   
     try {
       const result = await pool.query(query, values);
